@@ -23,7 +23,7 @@ This directory contains the operational guides for the course-notes system. Cour
 
 ## Study Workflows
 
-Reusable LLM prompts live under [prompts](../prompts/). Begin with:
+Reusable LLM prompts live under [prompts/README.md](../prompts/README.md). Begin with:
 
 - [Import a lecture](../prompts/import-lecture.md)
 - [Daily study](../prompts/daily-study.md)

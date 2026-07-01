@@ -240,7 +240,7 @@ The score ranks attention; it is not a grade or automatic status decision. Use `
 4. Follow prerequisite and related IDs only when needed.
 5. Treat the Markdown notes as authoritative and generated files as disposable indexes.
 
-See [LLM_GUIDE.md](LLM_GUIDE.md) for the full protocol and [prompts/](prompts/) for ready-to-use study workflows.
+See [LLM_GUIDE.md](LLM_GUIDE.md) for the full protocol and [prompts/README.md](prompts/README.md) for ready-to-use study workflows.
 
 ## LLM Workflow Reference
 
