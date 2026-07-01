@@ -51,6 +51,12 @@ Read [docs/publication-policy.md](docs/publication-policy.md) before changing vi
 
 This sanitized candidate contains only `public-framework` or `public-original` notes with `source-risk: original`; `make validate-public` must pass before release.
 
+### Public framework vs private notes
+
+This repository is the public framework. It contains tooling, templates, prompts, documentation, validation logic, and synthetic/demo content.
+
+Real course notes should live in a separate private repository or private copy. A private notes repository may intentionally fail `make validate-public` because it can contain `visibility: private` or course-derived material. A public framework release must always pass `make pre-release`.
+
 ## Repository Structure
 
 ```text
