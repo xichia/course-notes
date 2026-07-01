@@ -27,8 +27,9 @@ Reusable LLM prompts live under [prompts/README.md](../prompts/README.md). Begin
 
 - [Import a lecture](../prompts/import-lecture.md)
 - [Daily study](../prompts/daily-study.md)
-- [Weekly review](../prompts/weekly-review.md)
+- [Log a mistake](../prompts/log-a-mistake.md)
 - [Evidence-based status update](../prompts/update-status.md)
+- [Weekly review](../prompts/weekly-review.md)
 
 ## Maintenance
 
