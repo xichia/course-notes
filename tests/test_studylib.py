@@ -12,6 +12,7 @@ from studylib import (
     format_issue,
     generation_date,
     has_substantive_section,
+    load_blocklist,
     mistake_summary,
     parse_frontmatter,
     parse_mistake_log,
@@ -412,6 +413,54 @@ class StudyLibTests(unittest.TestCase):
         self.assertIn("First item", result)
         self.assertIn("Second item", result)
         self.assertNotIn("- First", result)
+
+    def test_blocklist_no_file_passes(self):
+        self.assertEqual([], load_blocklist(ROOT / "nonexistent-blocklist"))
+
+        note = make_note()
+        issues = validate_repository([note], public_release=True, blocklist=[])
+        errors = [i for i in issues if i.level == "error"]
+        self.assertEqual([], errors)
+
+    def test_blocklist_file_not_found_returns_empty(self):
+        self.assertEqual([], load_blocklist(ROOT / "nonexistent-blocklist.file"))
+
+    def test_blocklist_comments_and_blanks_ignored(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / ".public-release-blocklist"
+            path.write_text(
+                "# This is a comment\n\n\n  \n# Another comment\nDemo Secret University\n\nPRIVATE101\n",
+                encoding="utf-8",
+            )
+            terms = load_blocklist(path)
+            self.assertEqual(["Demo Secret University", "PRIVATE101"], terms)
+
+    def test_blocklist_catches_term_in_note(self):
+        text = VALID_TEXT + "\nDemo Secret University reference.\n"
+        note = make_note(text)
+        blocklist = ["Demo Secret University"]
+        issues = validate_repository([note], public_release=True, blocklist=blocklist)
+        messages = [i.message for i in issues]
+        self.assertTrue(any("blocked term" in msg for msg in messages))
+        self.assertTrue(any("Demo Secret University" in msg for msg in messages))
+
+    def test_blocklist_does_not_affect_normal_validation(self):
+        text = VALID_TEXT + "\nPRIVATE101 code.\n"
+        note = make_note(text)
+        blocklist = ["PRIVATE101"]
+        issues = validate_repository([note], public_release=False, blocklist=blocklist)
+        messages = [i.message for i in issues]
+        self.assertFalse(any("blocked term" in msg for msg in messages))
+
+    def test_blocklist_error_includes_file_and_term(self):
+        text = VALID_TEXT + "\nSecret term demo-lms.example here.\n"
+        note = make_note(text, filename="blocklist-test.md")
+        blocklist = ["demo-lms.example"]
+        issues = validate_repository([note], public_release=True, blocklist=blocklist)
+        matching = [i for i in issues if "blocked term" in i.message]
+        self.assertEqual(1, len(matching))
+        self.assertIn("blocklist-test.md", matching[0].file)
+        self.assertIn("demo-lms.example", matching[0].message)
 
 
 if __name__ == "__main__":

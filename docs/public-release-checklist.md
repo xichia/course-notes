@@ -22,6 +22,7 @@ Use this checklist on a separate sanitized public-release candidate. Do not turn
 - [ ] Confirm AI-generated paraphrases do not preserve protected course expression.
 - [ ] Search for absolute local paths, home-directory paths, drive-letter paths, and file URIs.
 - [ ] Search for sensitive terms, credentials, private links, student identifiers, and personal data.
+- [ ] (Optional) Create a `.public-release-blocklist` file with private terms (university names, course codes, lecturer names, LMS hostnames) before running checks.
 
 ## Run Checks
 

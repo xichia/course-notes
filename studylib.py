@@ -69,6 +69,30 @@ PUBLIC_RELEASE_SOURCE_SUSPICIOUS_TERMS = (
     "course pack",
 )
 
+BLOCKLIST_FILENAME = ".public-release-blocklist"
+
+
+def load_blocklist(path: Path | None = None) -> list[str]:
+    """Load the optional public-release blocklist.
+
+    Returns an empty list when the file does not exist.
+    Lines starting with ``#`` and blank lines are ignored.
+    Each remaining line is a case-insensitive term to block.
+    """
+    if path is None:
+        path = ROOT / BLOCKLIST_FILENAME
+    if not path.is_file():
+        return []
+    terms: list[str] = []
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            terms.append(stripped)
+    return terms
+
+
 FRONTMATTER_RE = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL)
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -464,7 +488,7 @@ def has_substantive_section(note: Note, heading: str) -> bool:
     return True
 
 
-def validate_repository(notes: list[Note] | None = None, public_release: bool = False) -> list[Issue]:
+def validate_repository(notes: list[Note] | None = None, public_release: bool = False, blocklist: list[str] | None = None) -> list[Issue]:
     supplied_notes = notes is not None
     notes = notes if supplied_notes else load_notes()
     issues: list[Issue] = []
@@ -787,7 +811,41 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
                         )
                     )
 
+    if public_release and blocklist:
+        scanned: set[Path] = set()
+        for note in notes:
+            if note.path.resolve() not in scanned:
+                scanned.add(note.path.resolve())
+                issues.extend(_scan_blocklist_term(note.text, note.file, blocklist))
+        for path in discover_markdown_paths():
+            if path.resolve() in scanned:
+                continue
+            scanned.add(path.resolve())
+            text = path.read_text(encoding="utf-8")
+            rel = path.relative_to(ROOT).as_posix()
+            issues.extend(_scan_blocklist_term(text, rel, blocklist))
+
     return sorted(issues, key=lambda issue: (issue.file, issue.level != "error", issue.message))
+
+
+def _scan_blocklist_term(text: str, file: str, blocklist: list[str]) -> list[Issue]:
+    """Check *text* for every term in *blocklist* and return matching Issues."""
+    issues: list[Issue] = []
+    lower = text.lower()
+    for term in blocklist:
+        term_lower = term.lower()
+        pos = lower.find(term_lower)
+        if pos == -1:
+            continue
+        line_num = text[:pos].count("\n") + 1
+        issues.append(
+            Issue(
+                "error",
+                file,
+                f"public release: blocked term '{term}' found (line {line_num}); remove or replace this term before publishing",
+            )
+        )
+    return issues
 
 
 def has_errors(issues: Iterable[Issue]) -> bool:

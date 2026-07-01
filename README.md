@@ -100,7 +100,7 @@ Never edit `manifest.json` or `REVIEW_QUEUE.md` manually. Update source Markdown
 | Command | Purpose |
 |---|---|---|
 | `make validate` | Check metadata, IDs, dates, links, required sections, and mistake structure |
-| `make validate-public` | Apply the stricter public-release gate; expected to fail in a real private study repo |
+| `make validate-public` | Apply the stricter public-release gate; expected to fail in a real private study repo. Loads `.public-release-blocklist` if present (see below) |
 | `make manifest` | Validate and rebuild `manifest.json` |
 | `make review` | Validate and rebuild `REVIEW_QUEUE.md` for today; set `DATE=YYYY-MM-DD` for a reproducible date |
 | `make test` | Run the dependency-free regression suite |
@@ -111,6 +111,20 @@ Never edit `manifest.json` or `REVIEW_QUEUE.md` manually. Update source Markdown
 The equivalent direct Python commands are shown in Quickstart.
 
 CI runs on every push and pull request: `make all`, `make validate-public`, `make pre-release`, and a generated-file staleness check. See [ci.yml](.github/workflows/ci.yml).
+
+### Optional blocklist
+
+Create `.public-release-blocklist` in the repository root with one term per line to extend `make validate-public`. Lines starting with `#` and blank lines are ignored. Matching is case-insensitive.
+
+```text
+# Lines starting with # are comments.
+Example University
+PROFESSOR NAME
+canvas.example.edu
+MATH123
+```
+
+When present, `make validate-public` scans all Markdown files for these terms and reports each match as an error. This is a safety smoke alarm — it does not replace manual review. Remove or replace any blocked terms before publishing.
 
 ## Adding a new course
 

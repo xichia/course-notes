@@ -3,7 +3,7 @@
 
 import argparse
 
-from studylib import discover_note_paths, format_issue, has_errors, validate_repository
+from studylib import discover_note_paths, format_issue, has_errors, load_blocklist, validate_repository
 
 
 def main() -> int:
@@ -16,7 +16,8 @@ def main() -> int:
     args = parser.parse_args()
 
     paths = discover_note_paths()
-    issues = validate_repository(public_release=args.public_release)
+    blocklist = load_blocklist() if args.public_release else None
+    issues = validate_repository(public_release=args.public_release, blocklist=blocklist)
     for issue in issues:
         print(format_issue(issue))
 
