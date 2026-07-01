@@ -110,6 +110,8 @@ Never edit `manifest.json` or `REVIEW_QUEUE.md` manually. Update source Markdown
 
 The equivalent direct Python commands are shown in Quickstart.
 
+CI runs on every push and pull request: `make all`, `make validate-public`, `make pre-release`, and a generated-file staleness check. See [ci.yml](.github/workflows/ci.yml).
+
 ## Adding a new course
 
 The full copy-and-check workflow is in [docs/course-onboarding.md](docs/course-onboarding.md). In short:

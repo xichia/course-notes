@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Use commit timestamp for deterministic generated files
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+      - name: make all
+        run: make all
+      - name: make validate-public
+        run: make validate-public
+      - name: make pre-release
+        run: make pre-release
+      - name: Check generated files are not stale
+        run: git diff --exit-code
