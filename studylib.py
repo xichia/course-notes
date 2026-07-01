@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import csv
+import os
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -53,6 +54,20 @@ PUBLIC_RELEASE_BLOCKED_RISKS = {
 REVIEWABLE_TYPES = {"concept", "lecture", "problem-sheet"}
 MISTAKE_FIELDS = ("date", "source", "mistake", "correction", "tags")
 PRACTICE_LEVELS = {"easy": "easy", "medium": "medium", "exam-style": "exam-style"}
+
+PUBLIC_RELEASE_SOURCE_SUSPICIOUS_TERMS = (
+    "lms",
+    "moodle",
+    "canvas",
+    "blackboard",
+    "brightspace",
+    "lecture slide",
+    "lecture slides",
+    "slides",
+    "exam question",
+    "problem sheet",
+    "course pack",
+)
 
 FRONTMATTER_RE = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL)
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
@@ -265,16 +280,31 @@ def _without_html_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
+def _summarize_text(text: str, limit: int) -> str:
+    """Convert a Markdown block to a compact plain-text preview."""
+    if re.search(r"^\s*-\s+\S", text, re.MULTILINE):
+        items = re.findall(r"^\s*-\s+(.*)", text, re.MULTILINE)
+        if items:
+            items = [re.sub(r"\s+", " ", item).strip() for item in items]
+            return "; ".join(items)[:limit]
+    return re.sub(r"\s+", " ", text).strip()[:limit]
+
+
 def preview(note: Note, limit: int = 240) -> str:
     for heading in ("Summary", "Definition", "Overview", "Purpose"):
         content = section_text(note.body, heading)
         if content:
             paragraph = content.split("\n\n", 1)[0]
-            plain = re.sub(r"\s+", " ", paragraph).strip()
-            return plain[:limit]
+            return _summarize_text(paragraph, limit)
     for paragraph in note.body.split("\n\n"):
         if re.fullmatch(r"\s*#{1,6}\s+.+", paragraph):
             continue
+        if re.search(r"^\s*-\s+\S", paragraph, re.MULTILINE):
+            items = re.findall(r"^\s*-\s+(.*)", paragraph, re.MULTILINE)
+            if items:
+                items = [re.sub(r"\s+", " ", item).strip() for item in items]
+                plain = "; ".join(items)
+                return plain[:limit]
         plain = re.sub(r"[#*_`>\s]+", " ", paragraph).strip()
         if plain:
             return plain[:limit]
@@ -414,6 +444,9 @@ def practice_question_counts(note: Note) -> dict[str, int]:
             current_level = PRACTICE_LEVELS.get(heading.group(1).strip().lower())
             continue
         if current_level and re.match(r"^\s*-\s+\S", line):
+            stripped = re.sub(r"[*_`]", "", line.lstrip()).strip().lower()
+            if stripped.startswith("- no ") and "recorded yet" in stripped:
+                continue
             counts[current_level] += 1
     counts["total"] = sum(counts.values())
     return counts
@@ -424,7 +457,11 @@ def has_substantive_section(note: Note, heading: str) -> bool:
     if not content:
         return False
     normalized = re.sub(r"[*_`]", "", content).strip().lower()
-    return not normalized.startswith(("no ", "todo:", "[todo:"))
+    if normalized.startswith("no ") and "recorded yet" in normalized:
+        return False
+    if normalized.startswith(("todo:", "[todo:")):
+        return False
+    return True
 
 
 def validate_repository(notes: list[Note] | None = None, public_release: bool = False) -> list[Issue]:
@@ -590,6 +627,21 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
                     )
                 )
 
+            if valid_visibility and visibility in {"public-framework", "public-original", "public-open-licensed"}:
+                source = metadata.get("source", "")
+                if source:
+                    source_lower = source.lower()
+                    matched = [term for term in PUBLIC_RELEASE_SOURCE_SUSPICIOUS_TERMS if term in source_lower]
+                    if matched:
+                        issues.append(
+                            Issue(
+                                "error" if visibility != "public-open-licensed" else "warning",
+                                note.file,
+                                f"public release: source field contains suspicious term(s) {matched}; "
+                                "verify provenance before publishing or document the open licence",
+                            )
+                        )
+
         parsed_dates: dict[str, date | None] = {}
         for field in ("last-reviewed", "review-after"):
             if field not in metadata:
@@ -616,6 +668,15 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
 
         try:
             course_parts = note.path.relative_to(COURSES_DIR).parts
+            if len(course_parts) < 2:
+                issues.append(
+                    Issue(
+                        "error",
+                        note.file,
+                        "file location: move this note under courses/<course-code>/ rather than directly in courses/",
+                    )
+                )
+                continue
             path_course = course_parts[0]
             if metadata.get("course") != path_course:
                 issues.append(
@@ -687,25 +748,17 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
                 )
 
         issues.extend(portability_issues(note.text, note.file))
-        for target, line, _ in markdown_links(note.body):
-            target = target.split("#", 1)[0]
-            if not target.endswith(".md") or "://" in target or is_absolute_local_target(target):
-                continue
-            if not (note.path.parent / target).resolve().is_file():
-                issues.append(
-                    Issue(
-                        "error",
-                        note.file,
-                        f'Markdown link (line {line}): target "{target}" does not exist; correct the relative path or create the file',
-                    )
-                )
+        issues.extend(check_md_links(note.body, note.file, note.path))
 
     if not supplied_notes:
         note_paths = {note.path.resolve() for note in notes}
         for path in discover_markdown_paths():
             if path.resolve() in note_paths:
                 continue
-            issues.extend(portability_issues(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix()))
+            text = path.read_text(encoding="utf-8")
+            rel_path = path.relative_to(ROOT).as_posix()
+            issues.extend(portability_issues(text, rel_path))
+            issues.extend(check_md_links(text, rel_path, path))
 
     known_ids = set(ids)
     for note in notes:
@@ -750,3 +803,32 @@ def display_path(path: Path) -> str:
         return path.relative_to(ROOT).as_posix()
     except ValueError:
         return str(path)
+
+
+def generation_date() -> date:
+    """Return the preferred generation date, respecting SOURCE_DATE_EPOCH for reproducibility."""
+    epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if epoch is not None:
+        try:
+            return datetime.fromtimestamp(int(epoch), tz=timezone.utc).date()
+        except (ValueError, OSError):
+            pass
+    return date.today()
+
+
+def check_md_links(text: str, file: str, source_path: Path) -> list[Issue]:
+    """Check relative Markdown links resolve to an existing file."""
+    issues: list[Issue] = []
+    for target, line, _ in markdown_links(text):
+        target_path = target.split("#", 1)[0]
+        if not target_path.endswith(".md") or "://" in target_path or is_absolute_local_target(target_path):
+            continue
+        if not (source_path.parent / target_path).resolve().is_file():
+            issues.append(
+                Issue(
+                    "error",
+                    file,
+                    f'Markdown link (line {line}): target "{target_path}" does not exist; correct the relative path or create the file',
+                )
+            )
+    return issues

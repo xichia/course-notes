@@ -3,6 +3,8 @@
 A Markdown-first system for durable university notes, selective LLM retrieval, exam preparation, and spaced review. Markdown files under `courses/` are the source of truth; the manifest and review queue are generated views.
 
 > This is a sanitized public-framework candidate. Its only course tree is explicitly synthetic and contains no real university course material.
+>
+> License: MIT. See [LICENSE](LICENSE). The framework, scripts, templates, prompts, and documentation are MIT licensed. Real course-derived notes should not be published through this repository unless separately cleared.
 
 ## Quickstart
 
@@ -52,7 +54,7 @@ This sanitized candidate contains only `public-framework` or `public-original` n
 ## Repository Structure
 
 ```text
-course-notes/
+course-notes-framework/
 ├── courses/
 │   └── <course-code>/
 │       ├── course.md          course metadata, resources, and priorities
@@ -85,16 +87,20 @@ The included `courses/demo-course/` tree is fictional and exists only to demonst
 
 Never edit `manifest.json` or `REVIEW_QUEUE.md` manually. Update source Markdown and run `make manifest`, `make review`, or `make all`.
 
+**Determinism:** Generated files use a date-only `generated-at` field (no time). Running `make all` multiple times on the same day produces no diff when notes are unchanged. For fully reproducible builds, set the `SOURCE_DATE_EPOCH` environment variable (Unix timestamp) or pass `--today` to `build_review_queue.py`.
+
 ## Command Reference
 
 | Command | Purpose |
-|---|---|
+|---|---|---|
 | `make validate` | Check metadata, IDs, dates, links, required sections, and mistake structure |
 | `make validate-public` | Apply the stricter public-release gate; expected to fail in a real private study repo |
 | `make manifest` | Validate and rebuild `manifest.json` |
-| `make review` | Validate and rebuild `REVIEW_QUEUE.md` for today |
+| `make review` | Validate and rebuild `REVIEW_QUEUE.md` for today; set `DATE=YYYY-MM-DD` for a reproducible date |
 | `make test` | Run the dependency-free regression suite |
-| `make all` | Run validation, both generators, and all tests |
+| `make pre-release` | Run the public-release gate, regenerate all files, and run tests (for release readiness) |
+| `make all` | Run normal validation, both generators, and all tests |
+| `python3 build_review_queue.py --today YYYY-MM-DD` | Generate the review queue for a specific date |
 
 The equivalent direct Python commands are shown in Quickstart.
 

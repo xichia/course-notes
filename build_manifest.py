@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
 
 from studylib import (
     ROOT,
     display_path,
     format_issue,
+    generation_date,
     has_substantive_section,
     has_errors,
     load_notes,
@@ -85,7 +85,7 @@ def build_manifest(output: Path) -> int:
     manifest = {
         "_generated": GENERATED_WARNING,
         "format-version": 3,
-        "generated-at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "generated-at": generation_date().isoformat(),
         "how-to-use": [
             "Filter by course, type, topic, status, exam-weight, visibility, source-risk, aliases, mistakes, or practice coverage.",
             "Read summary and headings to choose notes, then open only the listed file paths you need.",

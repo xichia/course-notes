@@ -26,14 +26,22 @@ Use this checklist on a separate sanitized framework candidate. Do not turn the 
 ## Run Checks
 
 ```bash
-make all
-make validate-public
+make pre-release
 ```
 
-- [ ] Normal validation and tests pass.
-- [ ] Public-release validation passes with no private, course-derived, unknown-risk, or unclassified notes.
+Or step by step:
+
+```bash
+make validate-public
+make manifest
+make review
+make test
+```
+
+- [ ] Public-release validation passes with no private, course-derived, unknown-risk, unclassified notes, or suspicious source references.
 - [ ] Generated files were rebuilt from the sanitized Markdown sources.
 - [ ] Relative Markdown links resolve in the release candidate.
+- [ ] Running `make pre-release` twice produces no diff.
 
 ## Manual Approval
 

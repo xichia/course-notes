@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -128,7 +129,7 @@ def rank_note(note: Note, today: date) -> ReviewItem:
 def recommended_action(item: ReviewItem) -> str:
     metadata = item.note.metadata
     if item.recent_mistakes:
-        return "Re-test the recent mistake's correction with a fresh problem."
+        return "Re-test the recent mistake(s) correction with a fresh problem."
     if metadata["status"] == "shaky":
         return "Recall the definition, then solve the worked example unaided."
     if item.missing_practice:
@@ -226,7 +227,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=ROOT / "REVIEW_QUEUE.md", help="output Markdown path")
     parser.add_argument("--today", help="override today's date (YYYY-MM-DD), useful for reproducible checks")
     args = parser.parse_args()
-    today = datetime.strptime(args.today, "%Y-%m-%d").date() if args.today else date.today()
+    date_from_env = os.environ.get("DATE")
+    today = (
+        datetime.strptime(args.today, "%Y-%m-%d").date()
+        if args.today
+        else datetime.strptime(date_from_env, "%Y-%m-%d").date()
+        if date_from_env
+        else date.today()
+    )
     output = args.output if args.output.is_absolute() else ROOT / args.output
     return build_queue(output, today)
 

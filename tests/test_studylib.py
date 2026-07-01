@@ -10,6 +10,8 @@ from studylib import (
     ROOT,
     Note,
     format_issue,
+    generation_date,
+    has_substantive_section,
     mistake_summary,
     parse_frontmatter,
     parse_mistake_log,
@@ -338,6 +340,78 @@ class StudyLibTests(unittest.TestCase):
     def test_existing_repository_notes_remain_valid(self):
         errors = [issue for issue in validate_repository() if issue.level == "error"]
         self.assertEqual([], errors)
+
+    def test_note_directly_under_courses_is_rejected(self):
+        text = "---\nid: bad-placement\ntitle: Bad\ntype: reference\ntopic: bad\ncourse: foo\naliases: []\nprerequisites: []\nrelated: []\nexam-weight: none\nstatus: reference\nlast-reviewed:\nreview-after:\nsource: test\n---\n\n# Bad"
+        metadata, body, errors = parse_frontmatter(text)
+        note = Note(ROOT / "courses" / "foo.md", metadata, body, text, tuple(errors))
+        issues = validate_repository([note])
+        self.assertTrue(any("move this note under" in issue.message for issue in issues))
+
+    def test_public_release_rejects_lms_source_in_public_note(self):
+        for term in ("lms", "moodle", "lecture slide", "exam question", "problem sheet", "course pack"):
+            text = VALID_TEXT.replace("source: \"Test fixture\"", f"source: \"{term} reference\"")
+            issues = validate_repository([make_note(text)], public_release=True)
+            self.assertTrue(any("suspicious term" in issue.message for issue in issues), f"term '{term}' not caught")
+
+    def test_public_release_allows_clean_source_in_public_note(self):
+        text = VALID_TEXT.replace("source: \"Test fixture\"", "source: \"Synthetic framework example\"")
+        issues = validate_repository([make_note(text)], public_release=True)
+        self.assertFalse(any("suspicious term" in issue.message for issue in issues))
+
+    def test_placeholder_bullet_not_counted_as_practice_question(self):
+        text = VALID_TEXT.replace("- Test question A.", "- _No practice questions recorded yet._")
+        counts = practice_question_counts(make_note(text))
+        self.assertEqual(0, counts["easy"])
+        # Medium is also placeholder, exam-style has a real question
+        self.assertEqual(0, counts["medium"])
+        self.assertEqual(1, counts["exam-style"])
+        self.assertEqual(1, counts["total"])
+
+    def test_not_applicable_not_treated_as_empty(self):
+        text = VALID_TEXT.replace("An example.", "Not applicable here.")
+        note = make_note(text)
+        self.assertTrue(has_substantive_section(note, "Worked Example"))
+
+    def test_broken_markdown_link_in_non_note_file_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp_dir:
+            temp_path = Path(temp_dir)
+            broken = temp_path / "broken-link.md"
+            broken.write_text("[missing](does-not-exist.md)", encoding="utf-8")
+            link_issues = validate_repository()
+            link_messages = [issue.message for issue in link_issues]
+            # The temp file is outside the repo root, so discover_markdown_paths won't find it.
+            # Instead test the helper directly
+            from studylib import check_md_links
+            issues = check_md_links(broken.read_text(encoding="utf-8"), str(broken), broken)
+            self.assertTrue(any("does not exist" in issue.message for issue in issues), link_messages)
+
+    def test_generation_date_respects_source_date_epoch(self):
+        import os
+        try:
+            os.environ["SOURCE_DATE_EPOCH"] = "1704067200"
+            self.assertEqual(date(2024, 1, 1), generation_date())
+        finally:
+            os.environ.pop("SOURCE_DATE_EPOCH", None)
+
+    def test_generation_date_date_only_in_manifest(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp_dir:
+            output = Path(temp_dir) / "manifest.json"
+            self.assertEqual(0, build_manifest(output))
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+            self.assertIsInstance(manifest["generated-at"], str)
+            # Should be date-only (YYYY-MM-DD), not full timestamp
+            self.assertRegex(manifest["generated-at"], r"^\d{4}-\d{2}-\d{2}$")
+
+    def test_preview_handles_bullet_lists_gracefully(self):
+        from studylib import preview
+        text = "---\nid: demo-bullet\ntitle: Bullet Test\ntype: concept\ncourse: demo\ntopic: examples\naliases: []\nprerequisites: []\nrelated: []\nexam-weight: none\nstatus: new\nlast-reviewed:\nreview-after:\nsource: test\nvisibility: public-original\nsource-risk: original\n---\n\n# Bullet Test\n\n## Definition\n\n- First item\n- Second item\n- Third item"
+        metadata, body, errors = parse_frontmatter(text)
+        note = Note(Path("courses/demo/concepts/bullet.md"), metadata, body, text, tuple(errors))
+        result = preview(note)
+        self.assertIn("First item", result)
+        self.assertIn("Second item", result)
+        self.assertNotIn("- First", result)
 
 
 if __name__ == "__main__":

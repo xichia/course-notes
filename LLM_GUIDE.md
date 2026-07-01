@@ -12,6 +12,8 @@ This repository is a Markdown-first study system. Use it to help the student ret
 
 Never edit generated files directly. Update source Markdown and run the generators.
 
+**Staleness warning:** Generated files are committed for convenience but may be stale. If `manifest.json`'s `generated-at` date is older than the latest note's `last-reviewed`, or if `REVIEW_QUEUE.md`'s header date is not today, regenerate both by running `make all` before relying on them.
+
 ## Publication and Privacy
 
 - Treat course-derived content and personal study evidence as private by default.
