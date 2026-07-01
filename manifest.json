@@ -1,0 +1,206 @@
+{
+  "_generated": "GENERATED FILE. DO NOT EDIT. Rebuild with: make manifest (or python3 build_manifest.py).",
+  "format-version": 3,
+  "generated-at": "2026-07-01T12:03:42+08:00",
+  "how-to-use": [
+    "Filter by course, type, topic, status, exam-weight, visibility, source-risk, aliases, mistakes, or practice coverage.",
+    "Read summary and headings to choose notes, then open only the listed file paths you need.",
+    "Treat Markdown notes as source of truth; this manifest is only a generated index."
+  ],
+  "count": 4,
+  "courses": {
+    "demo-course": {
+      "count": 4,
+      "types": {
+        "concept": 1,
+        "lecture": 1,
+        "reference": 2
+      },
+      "topics": [
+        "course-overview",
+        "repository-navigation",
+        "study-methods",
+        "syllabus"
+      ],
+      "note-ids": [
+        "demo-layered-recall",
+        "demo-course-lecture-01",
+        "demo-course-syllabus",
+        "demo-course-overview"
+      ]
+    }
+  },
+  "notes": [
+    {
+      "id": "demo-layered-recall",
+      "file": "courses/demo-course/concepts/layered-recall.md",
+      "title": "Layered Recall",
+      "course": "demo-course",
+      "type": "concept",
+      "topic": "study-methods",
+      "aliases": [
+        "demo recall method"
+      ],
+      "prerequisites": [],
+      "related": [
+        "demo-course-overview",
+        "demo-course-syllabus",
+        "demo-course-lecture-01"
+      ],
+      "exam-weight": "medium",
+      "status": "learning",
+      "last-reviewed": "2026-07-01",
+      "review-after": "2026-07-08",
+      "source": "Synthetic framework example written for this repository",
+      "visibility": "public-original",
+      "source-risk": "original",
+      "mistake-count": 0,
+      "recent-mistakes-30d": 0,
+      "latest-mistake": "",
+      "mistake-tags": [],
+      "has-worked-example": true,
+      "has-practice-questions": true,
+      "practice-questions": {
+        "easy": 1,
+        "medium": 1,
+        "exam-style": 0,
+        "total": 2
+      },
+      "summary": "Layered Recall is a fictional demonstration routine with two stages: first write a one-sentence answer from memory, then add one supporting detail without consulting the source.",
+      "headings": [
+        "Definition",
+        "Intuition",
+        "Worked Example",
+        "Common Mistakes",
+        "Mistake Log",
+        "Practice Questions",
+        "Related"
+      ]
+    },
+    {
+      "id": "demo-course-lecture-01",
+      "file": "courses/demo-course/lectures/2026-01-01-demo-session.md",
+      "title": "Demo Session — Repository Navigation",
+      "course": "demo-course",
+      "type": "lecture",
+      "topic": "repository-navigation",
+      "aliases": [],
+      "prerequisites": [],
+      "related": [
+        "demo-layered-recall"
+      ],
+      "exam-weight": "none",
+      "status": "reference",
+      "last-reviewed": "",
+      "review-after": "",
+      "source": "Synthetic framework example written for this repository",
+      "visibility": "public-framework",
+      "source-risk": "original",
+      "mistake-count": 0,
+      "recent-mistakes-30d": 0,
+      "latest-mistake": "",
+      "mistake-tags": [],
+      "has-worked-example": false,
+      "has-practice-questions": false,
+      "practice-questions": {
+        "easy": 0,
+        "medium": 0,
+        "exam-style": 0,
+        "total": 0
+      },
+      "summary": "- Date: 2026-01-01 - Lecturer: None—synthetic example - Materials: This repository's synthetic files only.",
+      "headings": [
+        "Lecture Details",
+        "Raw Notes",
+        "Unclear or Verify",
+        "Candidate Concepts",
+        "Source References"
+      ]
+    },
+    {
+      "id": "demo-course-syllabus",
+      "file": "courses/demo-course/syllabus.md",
+      "title": "Synthetic Demo Syllabus",
+      "course": "demo-course",
+      "type": "reference",
+      "topic": "syllabus",
+      "aliases": [
+        "demo syllabus"
+      ],
+      "prerequisites": [],
+      "related": [
+        "demo-layered-recall"
+      ],
+      "exam-weight": "none",
+      "status": "reference",
+      "last-reviewed": "",
+      "review-after": "",
+      "source": "Synthetic framework example written for this repository",
+      "visibility": "public-framework",
+      "source-risk": "original",
+      "mistake-count": 0,
+      "recent-mistakes-30d": 0,
+      "latest-mistake": "",
+      "mistake-tags": [],
+      "has-worked-example": false,
+      "has-practice-questions": false,
+      "practice-questions": {
+        "easy": 0,
+        "medium": 0,
+        "exam-style": 0,
+        "total": 0
+      },
+      "summary": "This is fictional framework data, not an official syllabus or summary of a real course.",
+      "headings": [
+        "Official Learning Outcomes",
+        "Weekly Topics",
+        "Assessment Topics",
+        "Exam-Relevant Sections",
+        "Excluded Topics",
+        "Lecturer Hints",
+        "Source Links or References"
+      ]
+    },
+    {
+      "id": "demo-course-overview",
+      "file": "courses/demo-course/course.md",
+      "title": "Synthetic Study Framework Demo",
+      "course": "demo-course",
+      "type": "reference",
+      "topic": "course-overview",
+      "aliases": [
+        "demo course"
+      ],
+      "prerequisites": [],
+      "related": [
+        "demo-layered-recall"
+      ],
+      "exam-weight": "none",
+      "status": "reference",
+      "last-reviewed": "",
+      "review-after": "",
+      "source": "Synthetic framework example written for this repository",
+      "visibility": "public-framework",
+      "source-risk": "original",
+      "mistake-count": 0,
+      "recent-mistakes-30d": 0,
+      "latest-mistake": "",
+      "mistake-tags": [],
+      "has-worked-example": false,
+      "has-practice-questions": false,
+      "practice-questions": {
+        "easy": 0,
+        "medium": 0,
+        "exam-style": 0,
+        "total": 0
+      },
+      "summary": "Demonstrate course organization, manifest retrieval, review metadata, and public-release validation without using real course material.",
+      "headings": [
+        "Course Details",
+        "Purpose",
+        "Current Weak Areas",
+        "Current Priorities"
+      ]
+    }
+  ]
+}

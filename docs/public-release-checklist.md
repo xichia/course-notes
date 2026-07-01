@@ -1,0 +1,45 @@
+# Public Release Checklist
+
+Use this checklist on a separate sanitized framework candidate. Do not turn the real private study repository public merely because an automated check passes.
+
+## Remove Private Course Material
+
+- [ ] Remove or replace real courses with clearly synthetic/demo courses.
+- [ ] Remove lecture-derived notes, slides, screenshots, recordings, transcripts, and close paraphrases.
+- [ ] Remove problem-sheet questions, solutions, attempts containing protected text, and derived examples.
+- [ ] Remove exam questions, assessment material, and course-derived exam maps.
+- [ ] Remove lecturer-specific hints, examples, anecdotes, and teaching sequences.
+- [ ] Remove LMS material, restricted links, announcements, and copied handbook text.
+- [ ] Remove personal study evidence that should remain private.
+- [ ] Remove every file marked `visibility: private`.
+
+## Verify What Remains
+
+- [ ] Use synthetic examples or independently written generic explanations.
+- [ ] Confirm every `public-open-licensed` item has an explicit licence and required attribution.
+- [ ] Confirm every public note has an allowed `visibility` and `source-risk` classification.
+- [ ] Confirm no copyrighted or access-restricted course material remains.
+- [ ] Confirm AI-generated paraphrases do not preserve protected course expression.
+- [ ] Search for absolute local paths, home-directory paths, drive-letter paths, and file URIs.
+- [ ] Search for sensitive terms, credentials, private links, student identifiers, and personal data.
+
+## Run Checks
+
+```bash
+make all
+make validate-public
+```
+
+- [ ] Normal validation and tests pass.
+- [ ] Public-release validation passes with no private, course-derived, unknown-risk, or unclassified notes.
+- [ ] Generated files were rebuilt from the sanitized Markdown sources.
+- [ ] Relative Markdown links resolve in the release candidate.
+
+## Manual Approval
+
+- [ ] Review the complete Git diff and staged file list manually.
+- [ ] Open representative rendered Markdown files on GitHub or a previewer.
+- [ ] Confirm the repository communicates that its value is the framework, not course-material publication.
+- [ ] Push only after this manual review is complete.
+
+Passing this checklist is a release decision, not legal clearance. See [publication policy](publication-policy.md).
