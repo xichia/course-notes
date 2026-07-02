@@ -11,6 +11,7 @@ This directory contains the operational guides for the course-notes system. Cour
 | [LLM guide](../LLM_GUIDE.md) | Giving an LLM the repository's retrieval, evidence, and editing rules |
 | [Publication policy](publication-policy.md) | Deciding what belongs in the tracked `courses/` tree and what stays under `private/` |
 | [Repository layout](repository-layout.md) | One-folder workflow: tracked `courses/` plus the Git-ignored `private/` directory |
+| [Operating checklist](operating-checklist.md) | Quick reference for the daily study and pre-commit workflow |
 | [Public release checklist](public-release-checklist.md) | Manually sanitizing and reviewing material before it enters `courses/` |
 
 ## Templates

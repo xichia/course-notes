@@ -16,7 +16,10 @@ After adding or changing notes, run the normal workflow:
 make all
 ```
 
-This validates notes, rebuilds generated files, and runs tests. If Make is unavailable, use the direct commands:
+This validates notes, rebuilds generated files, and runs tests.  For the
+complete one-folder workflow (including private-study commands and the
+pre-commit safety gate), see
+[docs/operating-checklist.md](docs/operating-checklist.md). If Make is unavailable, use the direct commands:
 
 ```bash
 python3 validate_notes.py
