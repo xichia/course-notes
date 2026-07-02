@@ -43,3 +43,14 @@ make all
 ```
 
 Generated files are committed for convenient GitHub and LLM access, but they must be rebuilt rather than edited manually.
+
+## Optional pre-commit hook
+
+To install a local pre-commit hook that runs `make public-safety`
+before every commit:
+
+```bash
+make install-hooks
+```
+
+The hook is entirely optional; see [operating-checklist.md](operating-checklist.md) for details.

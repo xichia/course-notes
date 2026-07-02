@@ -141,3 +141,54 @@ If `make public-safety` fails:
 
 4. If a public file references `private/`, edit the file to remove the leak.
 5. Re-run `make public-safety` to confirm the fix.
+
+---
+
+## 8. Optional pre-commit hook (local only)
+
+The repo provides an optional local pre-commit hook that runs
+`make public-safety` before every commit.  It is **not installed by default**
+and is entirely opt-in.
+
+### Install
+
+```bash
+make install-hooks
+```
+
+This copies `scripts/pre-commit` to `.git/hooks/pre-commit` and makes it
+executable.  The hook runs only on your local machine; it is not committed
+or shared.
+
+### Uninstall
+
+```bash
+make uninstall-hooks
+```
+
+Removes `.git/hooks/pre-commit` only if it matches the Course Notes hook.
+If you have replaced it with a custom hook, the target will warn and leave
+it untouched.
+
+### Bypass
+
+When you deliberately need to commit despite a failing gate:
+
+```bash
+git commit --no-verify
+```
+
+Reserve this for genuine emergencies or temporary experiments.  If the
+gate is blocking you in normal work, fix the underlying issue rather than
+routinely bypassing the hook.
+
+### How it works
+
+The hook `cd`s to the repository root and runs:
+
+```bash
+make public-safety
+```
+
+It exits nonzero on failure, which prevents the commit.  Messages are
+prefixed with `pre-commit (Course Notes):` for clarity.

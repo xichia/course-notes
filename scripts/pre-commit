@@ -1,0 +1,26 @@
+#!/bin/sh
+# Optional local pre-commit hook for Course Notes.
+#
+# Installed by `make install-hooks` and removed by `make uninstall-hooks`.
+# This hook is entirely optional — contributors are not required to install it.
+#
+# Bypass with:  git commit --no-verify
+#
+# Runs the public-safety gate to check that no private material has leaked
+# beyond the Git-ignored private/ boundary before allowing a commit.
+
+set -e
+
+REPO_ROOT="$(cd "$(git rev-parse --git-dir)/.." && pwd)"
+cd "$REPO_ROOT"
+
+echo "pre-commit (Course Notes): running make public-safety..."
+
+if make public-safety; then
+    echo "pre-commit (Course Notes): public-safety passed."
+    exit 0
+else
+    echo "pre-commit (Course Notes): FAILED — blocked by public-safety gate."
+    echo "  Fix the reported issues, or bypass with: git commit --no-verify"
+    exit 1
+fi
