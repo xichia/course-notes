@@ -11,9 +11,9 @@ Checks in order:
 1. ``git ls-files private/`` — any tracked file under ``private/`` is a leak.
 2. ``git diff --cached --name-only -- private/`` — any staged addition under
    ``private/`` would introduce private material into the next commit.
-3. ``git grep`` for ``private/`` references in the public surface — leaked
-   path references in ``courses/`` notes or generated files (``manifest.json``,
-   ``REVIEW_QUEUE.md``) would reveal private structure.
+3. Scan every tracked and staged non-private text file for leak patterns.
+   The scan list is built dynamically from Git rather than hardcoded, so
+   newly added files are automatically covered.
 4. Run ``validate_notes.py --public-release`` on the public ``courses/`` tree.
 5. Run the full test suite.
 
@@ -24,20 +24,41 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 from studylib import ROOT
 
-# Tracked files that must never reference private/ paths.
-# Docs/ and prompts/ legitimately describe the one-folder layout, so they
-# are excluded from the private/ scan; only the note surface and generated
-# indexes are checked.
-PUBLIC_SURFACE: list[str] = [
-    "courses/",
-    "manifest.json",
-    "REVIEW_QUEUE.md",
-    "INDEX.md",
-    "LLM_GUIDE.md",
+BLOCKED_PATTERNS: list[str] = [
+    "private/",
+    "private/courses/",
+    "/Users/ianchia",
+    "file://",
 ]
+
+# Framework paths that legitimately reference private/ in documentation,
+# help strings, or layout descriptions.  They are excluded from the
+# private/ and private/courses/ pattern checks.  The /Users/ianchia and
+# file:// patterns still apply to them since those are unequivocal leaks.
+FRAMEWORK_PREFIXES: tuple[str, ...] = (
+    "docs/",
+    "prompts/",
+    "templates/",
+    ".github/",
+)
+FRAMEWORK_EXACT: tuple[str, ...] = (
+    ".gitignore",
+    "LICENSE",
+    "Makefile",
+    "TEMPLATE.md",
+    "README.md",
+    "LLM_GUIDE.md",
+    "studylib.py",
+    "build_manifest.py",
+    "build_review_queue.py",
+    "check_public_safety.py",
+    "mark_reviewed.py",
+    "validate_notes.py",
+)
 
 
 def _run_git(args: list[str]) -> subprocess.CompletedProcess:
@@ -49,14 +70,70 @@ def _run_git(args: list[str]) -> subprocess.CompletedProcess:
     )
 
 
-def _git_grep(patterns: list[str], paths: list[str]) -> subprocess.CompletedProcess:
-    """Call ``git grep`` with one or more *patterns* restricted to *paths*."""
-    cmd = ["git", "grep", "-n", "--no-color"]
-    for p in patterns:
-        cmd.extend(["-e", p])
-    cmd.append("--")
-    cmd.extend(paths)
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+def _is_private(path_str: str) -> bool:
+    """Return True if *path_str* is under the ignored ``private/`` tree."""
+    return path_str.startswith("private/") or path_str == "private"
+
+
+def _is_framework(path_str: str) -> bool:
+    """Return True if *path_str* is a framework file that legitimately references ``private/``."""
+    if any(path_str.startswith(p) for p in FRAMEWORK_PREFIXES):
+        return True
+    if path_str in FRAMEWORK_EXACT:
+        return True
+    return False
+
+
+def _candidate_paths() -> list[str]:
+    """Return the union of tracked and staged paths, excluding ``private/`` and the gate itself."""
+    seen: set[str] = set()
+
+    r = _run_git(["ls-files"])
+    if r.returncode != 0:
+        print(f"FAILED: git ls-files failed:\n  {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if line and not _is_private(line) and line != "check_public_safety.py":
+            seen.add(line)
+
+    r = _run_git(["diff", "--cached", "--name-only"])
+    if r.returncode != 0:
+        print(f"FAILED: git diff --cached failed:\n  {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if line and not _is_private(line) and line != "check_public_safety.py":
+            seen.add(line)
+
+    return sorted(seen)
+
+
+def _scan_path(path_str: str, patterns: list[str]) -> list[str]:
+    """Scan *path_str* for *patterns*.
+
+    Returns a list of formatted ``file:line:match`` strings.
+    File is skipped cleanly if it is missing, a directory, binary, or
+    cannot be decoded as UTF-8 text.
+    """
+    abspath = ROOT / path_str
+    if not abspath.exists():
+        return []
+    if abspath.is_dir():
+        return []
+
+    try:
+        text = abspath.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return []
+
+    hits: list[str] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        lower = line.lower()
+        for pat in patterns:
+            if pat.lower() in lower or pat in line:
+                hits.append(f"    {path_str}:{lineno}: {line.strip()}")
+    return hits
 
 
 def main() -> int:
@@ -84,23 +161,40 @@ def main() -> int:
             + "".join(f"    git restore --staged {f}\n" for f in r.stdout.splitlines())
         )
 
-    # ── 3. No private/ path references in the public surface ──────────────
-    # Check the note-and-index surface for leaked references to the private
-    # directory.  Docs and prompts are excluded because they legitimately
-    # describe the one-folder layout.  The patterns ``private/`` and
-    # ``private/courses/`` catch relative path references that would reveal
-    # the private directory structure (e.g. in a note's body linking to a
-    # private file, or a generated manifest entry pointing under private/).
+    # ── 3. No leak patterns in tracked/staged non-private files ───────────
+    candidates = _candidate_paths()
 
-    r = _git_grep(["private/", "private/courses/"], PUBLIC_SURFACE)
-    if r.returncode == 0 and r.stdout.strip():
+    private_hits: list[str] = []
+    local_hits: list[str] = []
+
+    for path_str in candidates:
+        if _is_framework(path_str):
+            # Framework files: only scan for absolute-local-path patterns.
+            hits = _scan_path(path_str, ["/Users/ianchia", "file://"])
+            local_hits.extend(hits)
+        else:
+            # Non-framework files: scan for all blocked patterns.
+            hits = _scan_path(path_str, BLOCKED_PATTERNS)
+            for h in hits:
+                pat = h.split(": ")[-1] if ": " in h else ""
+                if pat in ("/Users/ianchia", "file://") or pat.startswith("/Users/") or pat.startswith("file:"):
+                    local_hits.append(h)
+                else:
+                    private_hits.append(h)
+
+    if private_hits:
         fails.append(
-            "FAILED: public-surface files reference private/ paths.\n"
+            "FAILED: public non-framework files reference private/ paths.\n"
             "  Tracked notes and generated files must not mention private material:\n"
-            + "".join(f"    {l}\n" for l in r.stdout.splitlines())
+            + "\n".join(private_hits)
         )
-    elif r.returncode not in (0, 1):
-        fails.append(f"FAILED: git grep on public surface failed:\n  {r.stderr.strip()}")
+
+    if local_hits:
+        fails.append(
+            "FAILED: tracked/staged files contain absolute local paths.\n"
+            "  These must be removed before a public release:\n"
+            + "\n".join(local_hits)
+        )
 
     if fails:
         for msg in fails:
