@@ -1,6 +1,6 @@
 # Public Release Checklist
 
-Use this checklist on a separate sanitized public-release candidate. Do not turn the real private study repository public merely because an automated check passes.
+Use this checklist before promoting any private material into `courses/` (the tracked tree the GitHub remote publishes). The Git-ignored `private/` directory is working storage, not a release; an automated pass on `courses/` is not permission to publish everything still living under `private/`.
 
 ## Remove Private Course Material
 

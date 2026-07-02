@@ -3,7 +3,7 @@
 
 import argparse
 
-from studylib import discover_note_paths, format_issue, has_errors, load_blocklist, validate_repository
+from studylib import STUDY_DIR, discover_note_paths, format_issue, has_errors, load_blocklist, validate_repository
 
 
 def main() -> int:
@@ -13,21 +13,30 @@ def main() -> int:
         action="store_true",
         help="fail on private, course-derived, unknown-risk, or unclassified notes",
     )
+    parser.add_argument(
+        "--study",
+        action="store_true",
+        help="validate notes under private/courses/ instead of courses/",
+    )
     args = parser.parse_args()
 
-    paths = discover_note_paths()
+    if args.public_release and args.study:
+        parser.error("--public-release and --study are mutually exclusive")
+
+    courses_dir = STUDY_DIR if args.study else None
+    paths = discover_note_paths(courses_dir=courses_dir)
     blocklist = load_blocklist() if args.public_release else None
-    issues = validate_repository(public_release=args.public_release, blocklist=blocklist)
+    issues = validate_repository(public_release=args.public_release, blocklist=blocklist, courses_dir=courses_dir)
     for issue in issues:
         print(format_issue(issue))
 
     errors = sum(issue.level == "error" for issue in issues)
     warnings = sum(issue.level == "warning" for issue in issues)
     if has_errors(issues):
-        mode = " public-release" if args.public_release else ""
+        mode = " study" if args.study else " public-release" if args.public_release else ""
         print(f"FAILED{mode}: {len(paths)} note(s), {errors} error(s), {warnings} warning(s).")
         return 1
-    mode = " public-release" if args.public_release else ""
+    mode = " study" if args.study else " public-release" if args.public_release else ""
     print(f"OK{mode}: {len(paths)} note(s), no errors, {warnings} warning(s).")
     return 0
 

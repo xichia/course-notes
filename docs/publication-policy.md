@@ -65,7 +65,7 @@ Never upgrade `visibility` from `private` or classify something as `open-license
 
 ## Release Rule
 
-Use `make validate-public` only on a manually sanitized public-release candidate. It intentionally fails on private, course-derived, unknown-risk, or unclassified notes. Passing the automated check is necessary but not sufficient: complete the [public release checklist](public-release-checklist.md) and manually review every file before publishing.
+This repository runs a one-folder workflow: `courses/` is the only course tree that is tracked by Git and pushed to the public remote, and everything source-risky or not yet cleared lives under the Git-ignored `private/` directory. `make validate-public` scans only `courses/` and intentionally fails on private, course-derived, unknown-risk, or unclassified notes; `private/` is outside its scope, so keeping risky material there does not weaken the gate. Passing the automated check is necessary but not sufficient: complete the [public release checklist](public-release-checklist.md) and manually review every file before promoting material from `private/` into `courses/`. See [repository layout](repository-layout.md) for the directory map.
 
 When in doubt, keep the material private.
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from studylib import (
     ROOT,
+    STUDY_DIR,
     display_path,
     format_issue,
     generation_date,
@@ -23,13 +24,17 @@ from studylib import (
     validate_repository,
 )
 
+GENERATED_WARNING_PUBLIC = "GENERATED FILE. DO NOT EDIT. Rebuild with: make manifest (or python3 build_manifest.py)."
+GENERATED_WARNING_STUDY = "GENERATED FILE. DO NOT EDIT. Rebuild with: make study-manifest (or python3 build_manifest.py --study)."
+GENERATED_WARNING = GENERATED_WARNING_PUBLIC  # backward compat for tests
 
-GENERATED_WARNING = "GENERATED FILE. DO NOT EDIT. Rebuild with: make manifest (or python3 build_manifest.py)."
 
+def build_manifest(output: Path, courses_dir: Path | None = None) -> int:
+    is_study = courses_dir is not None
+    GENERATED_WARNING = GENERATED_WARNING_STUDY if is_study else GENERATED_WARNING_PUBLIC
 
-def build_manifest(output: Path) -> int:
-    notes = load_notes()
-    issues = validate_repository()
+    notes = load_notes(courses_dir=courses_dir)
+    issues = validate_repository(courses_dir=courses_dir)
     for issue in issues:
         print(format_issue(issue))
     if has_errors(issues):
@@ -104,10 +109,18 @@ def build_manifest(output: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "manifest.json", help="output JSON path")
+    parser.add_argument("--output", type=Path, default=None, help="output JSON path")
+    parser.add_argument(
+        "--study",
+        action="store_true",
+        help="scan private/courses/ and write private/manifest.json",
+    )
     args = parser.parse_args()
-    output = args.output if args.output.is_absolute() else ROOT / args.output
-    return build_manifest(output)
+
+    courses_dir = STUDY_DIR if args.study else None
+    output = args.output if args.output else (ROOT / "private" / "manifest.json" if args.study else ROOT / "manifest.json")
+    output = output if output.is_absolute() else ROOT / output
+    return build_manifest(output, courses_dir=courses_dir)
 
 
 if __name__ == "__main__":

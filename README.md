@@ -2,7 +2,7 @@
 
 A Markdown-first system for durable learning notes, selective LLM retrieval, review queues, and study workflows. Markdown files under `courses/` are the source of truth; the manifest and review queue are generated views.
 
-> This is a sanitized public-release candidate. Its only course tree is explicitly synthetic and contains no real university course material.
+> One repository, one working copy. Tracked content (`courses/` plus the framework) is the public-safe surface pushed to the GitHub remote; raw or source-risky material lives under a Git-ignored `private/` directory and is never committed.
 >
 > License: MIT. See [LICENSE](LICENSE). The scripts, templates, prompts, and documentation are MIT licensed. Real course-derived notes should not be published through this repository unless separately cleared.
 
@@ -39,29 +39,32 @@ Make is only a convenience; the scripts require Python 3, use only the standard 
 
 ## Public/private content policy
 
-The publishable work in this repository is original study material, not reproduced lecture material.
+The publishable work in this repository is original study material, not reproduced lecture material. Both public and private material live in this **single** repository, separated by directory and Git tracking rather than by repository:
 
-| Public Course Notes material | Private by default |
+| Public Course Notes material (tracked, pushed) | Private by default (`private/`, Git-ignored) |
 |---|---|
 | Templates, scripts, prompts, docs, metadata schemas, validation logic, generated-file conventions, and synthetic examples | Real lecture-derived notes, problem sheets, exam maps/questions, lecturer hints, LMS material, assessment material, personal study evidence, and course-specific examples |
 
-Keep the real study repository private when it contains actual course notes. If a public version is useful, create a separately reviewed, sanitized public repository using synthetic/demo content. AI summarization or paraphrasing alone does not make protected course material safe to publish.
+- **`courses/`** holds only public-safe, polished notes. It is tracked by Git and must pass `make validate-public`. This is the only course tree the GitHub remote ever sees.
+- **`private/`** holds everything source-risky or not yet cleared: private course notes under `private/courses/`, raw source material under `private/raw/`, drafts under `private/drafts/`, and `private/framework-feedback.md`. The whole `private/` tree is ignored by Git (see [.gitignore](.gitignore)) and is never committed or pushed. It stays local to your working copy.
 
-Read [docs/publication-policy.md](docs/publication-policy.md) before changing visibility or preparing a release, and use [docs/public-release-checklist.md](docs/public-release-checklist.md) before making any repository public.
+AI summarizing or paraphrasing alone does not make protected course material safe to publish. Keeping a file under `private/` is not sanitization; promoting a private note into `courses/` requires a separate sanitization and review step.
 
-This sanitized candidate contains only `public-framework` or `public-original` notes with `source-risk: original`; `make validate-public` must pass before release.
+Read [docs/publication-policy.md](docs/publication-policy.md) before changing visibility or preparing a release, and use [docs/public-release-checklist.md](docs/public-release-checklist.md) before promoting any private note into `courses/`.
+
+`make validate-public` applies the same conservative gate as before: it scans only `courses/` and fails on `visibility: private`, course-derived or unknown `source-risk`, missing publication classifications, and local paths. The gate is not weakened by the `private/` directory — `private/` is simply outside its scan scope.
 
 ### Public vs private notes
 
-This repository is a public Course Notes repository. It contains tooling, templates, prompts, documentation, validation logic, and synthetic/demo content.
+This repository is both the study workspace and the public Course Notes release. Tooling, templates, prompts, documentation, validation logic, and synthetic/demo content are tracked; real course notes and raw source material are kept under the Git-ignored `private/` directory.
 
-Real course notes should live in a separate private repository or private copy. A private notes repository may intentionally fail `make validate-public` because it can contain `visibility: private` or course-derived material. A public release must always pass `make pre-release`.
+A note is private by default (`visibility: private`). A private note may live under `private/courses/` and intentionally fail `make validate-public`, because that gate only ever runs against `courses/`. A note may move into `courses/` only after it has been sanitized to `public-framework` / `public-original` / `public-open-licensed` with an allowed `source-risk` and has passed `make pre-release`.
 
 ## Repository Structure
 
 ```text
 course-notes/
-├── courses/
+├── courses/                        tracked, public-safe polished notes only
 │   └── <course-code>/
 │       ├── course.md          course metadata, resources, and priorities
 │       ├── syllabus.md        official outcomes and confirmed coverage
@@ -70,6 +73,11 @@ course-notes/
 │       ├── problem-sheets/    attempts, corrections, and reflections
 │       ├── exam/              exam maps and revision summaries
 │       └── glossary.md        course terminology
+├── private/                        Git-ignored; never committed or pushed
+│   ├── courses/               private/source-risky notes (mirror the courses/ layout)
+│   ├── raw/                   raw source material
+│   ├── drafts/                 work in progress
+│   └── framework-feedback.md  scratch notes about the framework itself
 ├── docs/                           onboarding and friction-test checklists
 ├── prompts/                        reusable LLM study workflows
 ├── templates/                      course, syllabus, and raw lecture templates
@@ -81,7 +89,7 @@ course-notes/
 └── REVIEW_QUEUE.md                 generated ranked review list
 ```
 
-The included `courses/demo-course/` tree is fictional and exists only to demonstrate the system. Replace it with other synthetic material—not real course notes—when preparing a public variant.
+The included `courses/demo-course/` tree is fictional and exists only to demonstrate the system; replace it with other synthetic material—not real course notes—when preparing a public variant. The `private/` directory is ignored by Git: it exists for your local working material and is not part of the public release.
 
 ## Source of Truth and Generated Files
 
@@ -100,7 +108,7 @@ Never edit `manifest.json` or `REVIEW_QUEUE.md` manually. Update source Markdown
 | Command | Purpose |
 |---|---|---|
 | `make validate` | Check metadata, IDs, dates, links, required sections, and mistake structure |
-| `make validate-public` | Apply the stricter public-release gate; expected to fail in a real private study repo. Loads `.public-release-blocklist` if present (see below) |
+| `make validate-public` | Apply the stricter public-release gate to `courses/` only; private notes under `private/` are outside its scope. Loads `.public-release-blocklist` if present (see below) |
 | `make manifest` | Validate and rebuild `manifest.json` |
 | `make review` | Validate and rebuild `REVIEW_QUEUE.md` for today; set `DATE=YYYY-MM-DD` for a reproducible date |
 | `make test` | Run the dependency-free regression suite |
@@ -109,8 +117,14 @@ Never edit `manifest.json` or `REVIEW_QUEUE.md` manually. Update source Markdown
 | `make reviewed NOTE=layered-recall` | Update `last-reviewed` and `review-after` for a note by ID (see below) |
 | `make reviewed NOTE=layered-recall DATE=2026-07-15` | As above, using a specific review date |
 | `python3 build_review_queue.py --today YYYY-MM-DD` | Generate the review queue for a specific date |
+| `make study-validate` | Validate notes under `private/courses/` |
+| `make study-manifest` | Build `private/manifest.json` from study notes |
+| `make study-review` | Build `private/REVIEW_QUEUE.md` from study notes |
+| `make study-all` | Run study-validate, study-manifest, and study-review |
+| `make study-reviewed NOTE=<id>` | Mark a study note under `private/courses/` as reviewed |
+| `make public-safety` | Validate the public tree and run all tests |
 
-The equivalent direct Python commands are shown in Quickstart.
+The equivalent direct Python commands are shown in Quickstart. Append `--study` to any tool to target `private/courses/` instead of `courses/`.
 
 CI runs on every push and pull request: `make all`, `make validate-public`, `make pre-release`, and a generated-file staleness check. See [ci.yml](.github/workflows/ci.yml).
 

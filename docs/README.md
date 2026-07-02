@@ -9,8 +9,9 @@ This directory contains the operational guides for the course-notes system. Cour
 | [Course onboarding](course-onboarding.md) | Adding a real module, its syllabus, lectures, concepts, problem sheets, and exam material |
 | [Course import friction test](friction-test.md) | Checking whether a newly imported course is quick to navigate, study, and update |
 | [LLM guide](../LLM_GUIDE.md) | Giving an LLM the repository's retrieval, evidence, and editing rules |
-| [Publication policy](publication-policy.md) | Deciding what belongs in a public Course Notes repository and what remains private |
-| [Public release checklist](public-release-checklist.md) | Manually sanitizing and reviewing a separate public release candidate |
+| [Publication policy](publication-policy.md) | Deciding what belongs in the tracked `courses/` tree and what stays under `private/` |
+| [Repository layout](repository-layout.md) | One-folder workflow: tracked `courses/` plus the Git-ignored `private/` directory |
+| [Public release checklist](public-release-checklist.md) | Manually sanitizing and reviewing material before it enters `courses/` |
 
 ## Templates
 

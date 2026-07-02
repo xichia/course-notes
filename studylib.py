@@ -14,6 +14,7 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parent
 COURSES_DIR = ROOT / "courses"
+STUDY_DIR = ROOT / "private" / "courses"
 
 REQUIRED_FIELDS = (
     "id",
@@ -195,8 +196,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str, list[str]]:
 
 
 def discover_markdown_paths() -> list[Path]:
-    """Find repository Markdown, excluding internal and cache directories."""
-    excluded = {".git", ".codex", ".agents", "__pycache__"}
+    """Find repository Markdown, excluding internal, cache, and Git-ignored working directories.
+
+    ``private/`` is the Git-ignored home for raw, source-risky, and unpublished
+    material (see ``.gitignore``). It is outside the public release surface, so
+    link and blocklist scans must not reach into it; this keeps the gate scoped
+    to the tracked ``courses/`` tree and framework files rather than weakened.
+    """
+    excluded = {".git", ".codex", ".agents", "__pycache__", "private"}
     return sorted(
         path
         for path in ROOT.rglob("*.md")
@@ -204,16 +211,21 @@ def discover_markdown_paths() -> list[Path]:
     )
 
 
-def discover_note_paths() -> list[Path]:
-    """Find study documents while excluding navigational README files."""
-    if not COURSES_DIR.exists():
+def discover_note_paths(courses_dir: Path | None = None) -> list[Path]:
+    """Find study documents while excluding navigational README files.
+
+    ``courses_dir`` may be set to ``STUDY_DIR`` to scan the Git-ignored
+    ``private/courses/`` tree instead of the public ``courses/``.
+    """
+    dir = courses_dir or COURSES_DIR
+    if not dir.exists():
         return []
-    return sorted(path for path in COURSES_DIR.rglob("*.md") if path.name.lower() != "readme.md")
+    return sorted(path for path in dir.rglob("*.md") if path.name.lower() != "readme.md")
 
 
-def load_notes(paths: Iterable[Path] | None = None) -> list[Note]:
+def load_notes(paths: Iterable[Path] | None = None, courses_dir: Path | None = None) -> list[Note]:
     notes = []
-    for path in paths if paths is not None else discover_note_paths():
+    for path in paths if paths is not None else discover_note_paths(courses_dir=courses_dir):
         text = path.read_text(encoding="utf-8")
         metadata, body, errors = parse_frontmatter(text)
         notes.append(Note(path, metadata, body, text, tuple(errors)))
@@ -488,14 +500,15 @@ def has_substantive_section(note: Note, heading: str) -> bool:
     return True
 
 
-def validate_repository(notes: list[Note] | None = None, public_release: bool = False, blocklist: list[str] | None = None) -> list[Issue]:
+def validate_repository(notes: list[Note] | None = None, public_release: bool = False, blocklist: list[str] | None = None, courses_dir: Path | None = None) -> list[Issue]:
     supplied_notes = notes is not None
-    notes = notes if supplied_notes else load_notes()
+    notes = notes if supplied_notes else load_notes(courses_dir=courses_dir)
     issues: list[Issue] = []
     ids: dict[str, str] = {}
+    active_courses_dir = courses_dir or COURSES_DIR
 
     if not notes:
-        return [Issue("error", "courses/", "no note files found")]
+        return [Issue("error", str(active_courses_dir.relative_to(ROOT)) + "/", "no note files found")]
 
     for note in notes:
         for message in note.parse_errors:
@@ -691,13 +704,14 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
                 )
 
         try:
-            course_parts = note.path.relative_to(COURSES_DIR).parts
+            course_parts = note.path.relative_to(active_courses_dir).parts
+            courses_label = str(active_courses_dir.relative_to(ROOT)) + "/<course-code>/"
             if len(course_parts) < 2:
                 issues.append(
                     Issue(
                         "error",
                         note.file,
-                        "file location: move this note under courses/<course-code>/ rather than directly in courses/",
+                        f"file location: move this note under {courses_label} rather than directly in {str(active_courses_dir.relative_to(ROOT)) + '/'}",
                     )
                 )
                 continue
@@ -729,7 +743,7 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
             if metadata.get("type") == "glossary" and (len(course_parts) != 2 or note.path.name != "glossary.md"):
                 issues.append(Issue("error", note.file, "frontmatter field 'type': glossary files must be named <course>/glossary.md"))
         except (ValueError, IndexError):
-            issues.append(Issue("error", note.file, "file location: move this note under courses/<course>/"))
+            issues.append(Issue("error", note.file, f"file location: move this note under {str(active_courses_dir.relative_to(ROOT)) + '/<course>/'}"))
 
         h1 = re.search(r"^#\s+(.+?)\s*$", note.body, re.MULTILINE)
         if not h1:
@@ -774,7 +788,7 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
         issues.extend(portability_issues(note.text, note.file))
         issues.extend(check_md_links(note.body, note.file, note.path))
 
-    if not supplied_notes:
+    if not supplied_notes and (courses_dir is None or courses_dir == COURSES_DIR):
         note_paths = {note.path.resolve() for note in notes}
         for path in discover_markdown_paths():
             if path.resolve() in note_paths:
@@ -811,7 +825,7 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
                         )
                     )
 
-    if public_release and blocklist:
+    if public_release and blocklist and (courses_dir is None or courses_dir == COURSES_DIR):
         scanned: set[Path] = set()
         for note in notes:
             if note.path.resolve() not in scanned:

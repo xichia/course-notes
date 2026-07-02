@@ -8,7 +8,7 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from studylib import ROOT, discover_note_paths, has_errors, parse_frontmatter, validate_repository
+from studylib import ROOT, STUDY_DIR, discover_note_paths, format_issue, has_errors, parse_frontmatter, validate_repository
 
 REVIEW_CADENCE: dict[str, int] = {
     "new": 1,
@@ -27,8 +27,8 @@ def _resolve_date(today: date, days: int) -> str:
     return (today + timedelta(days=days)).isoformat()
 
 
-def mark_reviewed(note_id: str, review_date: date) -> int:
-    paths = discover_note_paths()
+def mark_reviewed(note_id: str, review_date: date, courses_dir: Path | None = None) -> int:
+    paths = discover_note_paths(courses_dir=courses_dir)
     matches: list[tuple[Path, dict[str, str], str]] = []
 
     for path in paths:
@@ -91,7 +91,7 @@ def mark_reviewed(note_id: str, review_date: date) -> int:
     else:
         print(f"  review-after:  (blank — status is {status})")
 
-    issues = validate_repository()
+    issues = validate_repository(courses_dir=courses_dir)
     for issue in issues:
         print(format_issue(issue))
 
@@ -99,7 +99,8 @@ def mark_reviewed(note_id: str, review_date: date) -> int:
         print("ERROR: validation failed after update.", file=sys.stderr)
         return 1
 
-    print("\nRun `make all` to regenerate manifest and review queue.")
+    cmd = "make study-all" if courses_dir else "make all"
+    print(f"\nRun `{cmd}` to regenerate manifest and review queue.")
     return 0
 
 
@@ -107,8 +108,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("note_id", help="frontmatter `id` of the note to mark as reviewed")
     parser.add_argument("--date", "-d", type=date.fromisoformat, default=date.today(), help="review date (default: today)")
+    parser.add_argument(
+        "--study",
+        action="store_true",
+        help="scan private/courses/ instead of courses/",
+    )
     args = parser.parse_args()
-    return mark_reviewed(args.note_id, args.date)
+    courses_dir = STUDY_DIR if args.study else None
+    return mark_reviewed(args.note_id, args.date, courses_dir=courses_dir)
 
 
 if __name__ == "__main__":

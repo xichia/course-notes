@@ -12,6 +12,7 @@ from pathlib import Path
 from studylib import (
     REVIEWABLE_TYPES,
     ROOT,
+    STUDY_DIR,
     Note,
     display_path,
     format_issue,
@@ -25,7 +26,9 @@ from studylib import (
 
 STATUS_POINTS = {"shaky": 40, "new": 32, "learning": 26, "solid": 8, "mastered": 0}
 WEIGHT_POINTS = {"high": 25, "medium": 14, "low": 5, "none": 0}
-GENERATED_WARNING = "<!-- GENERATED FILE. DO NOT EDIT. Rebuild with: make review (or python3 build_review_queue.py). -->"
+GENERATED_WARNING_PUBLIC = "<!-- GENERATED FILE. DO NOT EDIT. Rebuild with: make review (or python3 build_review_queue.py). -->"
+GENERATED_WARNING_STUDY = "<!-- GENERATED FILE. DO NOT EDIT. Rebuild with: make study-review (or python3 build_review_queue.py --study). -->"
+GENERATED_WARNING = GENERATED_WARNING_PUBLIC  # backward compat for tests
 
 
 @dataclass(frozen=True)
@@ -166,9 +169,12 @@ def table(items: list[ReviewItem]) -> list[str]:
     return lines
 
 
-def build_queue(output: Path, today: date) -> int:
-    notes = load_notes()
-    issues = validate_repository()
+def build_queue(output: Path, today: date, courses_dir: Path | None = None) -> int:
+    is_study = courses_dir is not None
+    GENERATED_WARNING = GENERATED_WARNING_STUDY if is_study else GENERATED_WARNING_PUBLIC
+
+    notes = load_notes(courses_dir=courses_dir)
+    issues = validate_repository(courses_dir=courses_dir)
     for issue in issues:
         print(format_issue(issue))
     if has_errors(issues):
@@ -224,9 +230,18 @@ def build_queue(output: Path, today: date) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "REVIEW_QUEUE.md", help="output Markdown path")
+    parser.add_argument("--output", type=Path, default=None, help="output Markdown path")
     parser.add_argument("--today", help="override today's date (YYYY-MM-DD), useful for reproducible checks")
+    parser.add_argument(
+        "--study",
+        action="store_true",
+        help="scan private/courses/ and write private/REVIEW_QUEUE.md",
+    )
     args = parser.parse_args()
+
+    courses_dir = STUDY_DIR if args.study else None
+    default_output = ROOT / "private" / "REVIEW_QUEUE.md" if args.study else ROOT / "REVIEW_QUEUE.md"
+
     date_from_env = os.environ.get("DATE")
     today = (
         datetime.strptime(args.today, "%Y-%m-%d").date()
@@ -235,8 +250,9 @@ def main() -> int:
         if date_from_env
         else date.today()
     )
-    output = args.output if args.output.is_absolute() else ROOT / args.output
-    return build_queue(output, today)
+    output = args.output if args.output else default_output
+    output = output if output.is_absolute() else ROOT / output
+    return build_queue(output, today, courses_dir=courses_dir)
 
 
 if __name__ == "__main__":
