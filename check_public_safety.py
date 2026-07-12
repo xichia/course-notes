@@ -95,7 +95,7 @@ def _candidate_paths() -> list[str]:
         sys.exit(1)
     for line in r.stdout.splitlines():
         line = line.strip()
-        if line and not _is_private(line) and line != "check_public_safety.py":
+        if line and not _is_private(line) and line not in ("check_public_safety.py", "tests/test_public_safety.py"):
             seen.add(line)
 
     r = _run_git(["diff", "--cached", "--name-only"])
@@ -104,36 +104,23 @@ def _candidate_paths() -> list[str]:
         sys.exit(1)
     for line in r.stdout.splitlines():
         line = line.strip()
-        if line and not _is_private(line) and line != "check_public_safety.py":
+        if line and not _is_private(line) and line not in ("check_public_safety.py", "tests/test_public_safety.py"):
             seen.add(line)
 
     return sorted(seen)
 
 
-def _scan_path(path_str: str, patterns: list[str]) -> list[str]:
-    """Scan *path_str* for *patterns*.
+def _scan_content(text: str, path_str: str, patterns: list[str]) -> list[tuple[str, str]]:
+    """Scan *text* for *patterns*.
 
-    Returns a list of formatted ``file:line:match`` strings.
-    File is skipped cleanly if it is missing, a directory, binary, or
-    cannot be decoded as UTF-8 text.
+    Returns a list of tuples (formatted_hit_string, matched_pattern).
     """
-    abspath = ROOT / path_str
-    if not abspath.exists():
-        return []
-    if abspath.is_dir():
-        return []
-
-    try:
-        text = abspath.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
-        return []
-
-    hits: list[str] = []
+    hits = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         lower = line.lower()
         for pat in patterns:
             if pat.lower() in lower or pat in line:
-                hits.append(f"    {path_str}:{lineno}: {line.strip()}")
+                hits.append((f"    {path_str}:{lineno}: {line.strip()}", pat))
     return hits
 
 
@@ -169,19 +156,37 @@ def main() -> int:
     local_hits: list[str] = []
 
     for path_str in candidates:
-        if _is_framework(path_str):
-            # Framework files: only scan for absolute-local-path patterns.
-            hits = _scan_path(path_str, ["/Users/ianchia", "file://"])
-            local_hits.extend(hits)
-        else:
-            # Non-framework files: scan for all blocked patterns.
-            hits = _scan_path(path_str, BLOCKED_PATTERNS)
-            for h in hits:
-                pat = h.split(": ")[-1] if ": " in h else ""
+        patterns = ["/Users/ianchia", "file://"] if _is_framework(path_str) else BLOCKED_PATTERNS
+        
+        texts_to_scan: list[str] = []
+        
+        # Working tree
+        abspath = ROOT / path_str
+        if abspath.exists() and not abspath.is_dir():
+            try:
+                texts_to_scan.append(abspath.read_text(encoding="utf-8"))
+            except (UnicodeDecodeError, OSError):
+                pass
+                
+        # Index/Staged blob
+        try:
+            r = _run_git(["show", f":{path_str}"])
+            if r.returncode == 0:
+                texts_to_scan.append(r.stdout)
+        except UnicodeDecodeError:
+            pass
+            
+        unique_texts = list(set(texts_to_scan))
+        
+        for text in unique_texts:
+            hits = _scan_content(text, path_str, patterns)
+            for hit_str, pat in hits:
                 if pat in ("/Users/ianchia", "file://") or pat.startswith("/Users/") or pat.startswith("file:"):
-                    local_hits.append(h)
+                    if hit_str not in local_hits:
+                        local_hits.append(hit_str)
                 else:
-                    private_hits.append(h)
+                    if hit_str not in private_hits:
+                        private_hits.append(hit_str)
 
     if private_hits:
         fails.append(

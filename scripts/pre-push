@@ -1,0 +1,26 @@
+#!/bin/sh
+# Optional local pre-push hook for Course Notes.
+#
+# Installed by `make install-hooks` and removed by `make uninstall-hooks`.
+# This hook is entirely optional — contributors are not required to install it.
+#
+# Bypass with:  git push --no-verify
+#
+# Runs the public-safety gate to check that no private material has leaked
+# before allowing a push.
+
+set -e
+
+REPO_ROOT="$(cd "$(git rev-parse --git-dir)/.." && pwd)"
+cd "$REPO_ROOT"
+
+echo "pre-push (Course Notes): running make public-safety..."
+
+if make public-safety; then
+    echo "pre-push (Course Notes): public-safety passed."
+    exit 0
+else
+    echo "pre-push (Course Notes): FAILED — blocked by public-safety gate."
+    echo "  Fix the reported issues, or bypass with: git push --no-verify"
+    exit 1
+fi

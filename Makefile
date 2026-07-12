@@ -54,26 +54,44 @@ study-reviewed:
 public-safety:
 	$(PYTHON) check_public_safety.py
 
-HOOK_SRC = scripts/pre-commit
-HOOK_DST = .git/hooks/pre-commit
+HOOK_PRE_COMMIT_SRC = scripts/pre-commit
+HOOK_PRE_COMMIT_DST = .git/hooks/pre-commit
+HOOK_PRE_PUSH_SRC = scripts/pre-push
+HOOK_PRE_PUSH_DST = .git/hooks/pre-push
 
 install-hooks:
-	@if [ -f "$(HOOK_DST)" ] && ! cmp -s "$(HOOK_SRC)" "$(HOOK_DST)"; then \
-		echo "ERROR: $(HOOK_DST) already exists and differs from $(HOOK_SRC)."; \
+	@mkdir -p .git/hooks
+	@if [ -f "$(HOOK_PRE_COMMIT_DST)" ] && ! cmp -s "$(HOOK_PRE_COMMIT_SRC)" "$(HOOK_PRE_COMMIT_DST)"; then \
+		echo "ERROR: $(HOOK_PRE_COMMIT_DST) already exists and differs from $(HOOK_PRE_COMMIT_SRC)."; \
 		echo "  Remove or back up the existing hook manually, then re-run."; \
 		exit 1; \
 	fi
-	mkdir -p .git/hooks
-	cp "$(HOOK_SRC)" "$(HOOK_DST)"
-	chmod +x "$(HOOK_DST)"
-	@echo "Installed $(HOOK_DST)"
+	@if [ -f "$(HOOK_PRE_PUSH_DST)" ] && ! cmp -s "$(HOOK_PRE_PUSH_SRC)" "$(HOOK_PRE_PUSH_DST)"; then \
+		echo "ERROR: $(HOOK_PRE_PUSH_DST) already exists and differs from $(HOOK_PRE_PUSH_SRC)."; \
+		echo "  Remove or back up the existing hook manually, then re-run."; \
+		exit 1; \
+	fi
+	@cp "$(HOOK_PRE_COMMIT_SRC)" "$(HOOK_PRE_COMMIT_DST)"
+	@chmod +x "$(HOOK_PRE_COMMIT_DST)"
+	@echo "Installed $(HOOK_PRE_COMMIT_DST)"
+	@cp "$(HOOK_PRE_PUSH_SRC)" "$(HOOK_PRE_PUSH_DST)"
+	@chmod +x "$(HOOK_PRE_PUSH_DST)"
+	@echo "Installed $(HOOK_PRE_PUSH_DST)"
 
 uninstall-hooks:
-	@if [ -f "$(HOOK_DST)" ] && cmp -s "$(HOOK_SRC)" "$(HOOK_DST)"; then \
-		rm "$(HOOK_DST)"; \
-		echo "Removed $(HOOK_DST)"; \
-	elif [ -f "$(HOOK_DST)" ]; then \
-		echo "WARNING: $(HOOK_DST) is not managed by this project — leaving it in place."; \
+	@if [ -f "$(HOOK_PRE_COMMIT_DST)" ] && cmp -s "$(HOOK_PRE_COMMIT_SRC)" "$(HOOK_PRE_COMMIT_DST)"; then \
+		rm "$(HOOK_PRE_COMMIT_DST)"; \
+		echo "Removed $(HOOK_PRE_COMMIT_DST)"; \
+	elif [ -f "$(HOOK_PRE_COMMIT_DST)" ]; then \
+		echo "WARNING: $(HOOK_PRE_COMMIT_DST) is not managed by this project — leaving it in place."; \
 	else \
-		echo "No $(HOOK_DST) found — nothing to remove."; \
+		echo "No $(HOOK_PRE_COMMIT_DST) found — nothing to remove."; \
+	fi
+	@if [ -f "$(HOOK_PRE_PUSH_DST)" ] && cmp -s "$(HOOK_PRE_PUSH_SRC)" "$(HOOK_PRE_PUSH_DST)"; then \
+		rm "$(HOOK_PRE_PUSH_DST)"; \
+		echo "Removed $(HOOK_PRE_PUSH_DST)"; \
+	elif [ -f "$(HOOK_PRE_PUSH_DST)" ]; then \
+		echo "WARNING: $(HOOK_PRE_PUSH_DST) is not managed by this project — leaving it in place."; \
+	else \
+		echo "No $(HOOK_PRE_PUSH_DST) found — nothing to remove."; \
 	fi
