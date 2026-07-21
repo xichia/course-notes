@@ -5,17 +5,20 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
 from studylib import (
+    GenerationDateError,
     REVIEWABLE_TYPES,
     ROOT,
     STUDY_DIR,
     Note,
     display_path,
     format_issue,
+    generation_date,
     has_errors,
     load_notes,
     mistake_summary,
@@ -44,6 +47,28 @@ class ReviewItem:
 
 def parse_optional_date(value: str) -> date | None:
     return datetime.strptime(value, "%Y-%m-%d").date() if value else None
+
+
+def resolve_generation_date(today_override: str | None = None) -> date:
+    """Resolve the review date using CLI, DATE, then shared generation rules.
+
+    ``--today`` has highest precedence, followed by the historical ``DATE``
+    environment override.  Falling back to ``studylib.generation_date`` keeps
+    review-queue generation aligned with manifest generation, including its
+    support for ``SOURCE_DATE_EPOCH``.
+    """
+    if today_override:
+        try:
+            return datetime.strptime(today_override, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("--today must be a valid date in YYYY-MM-DD form") from exc
+    date_from_env = os.environ.get("DATE")
+    if date_from_env:
+        try:
+            return datetime.strptime(date_from_env, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("DATE must be a valid date in YYYY-MM-DD form") from exc
+    return generation_date()
 
 
 def rank_note(note: Note, today: date) -> ReviewItem:
@@ -228,7 +253,7 @@ def build_queue(output: Path, today: date, courses_dir: Path | None = None) -> i
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=None, help="output Markdown path")
     parser.add_argument("--today", help="override today's date (YYYY-MM-DD), useful for reproducible checks")
@@ -237,19 +262,16 @@ def main() -> int:
         action="store_true",
         help="scan private/courses/ and write private/REVIEW_QUEUE.md",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     courses_dir = STUDY_DIR if args.study else None
     default_output = ROOT / "private" / "REVIEW_QUEUE.md" if args.study else ROOT / "REVIEW_QUEUE.md"
 
-    date_from_env = os.environ.get("DATE")
-    today = (
-        datetime.strptime(args.today, "%Y-%m-%d").date()
-        if args.today
-        else datetime.strptime(date_from_env, "%Y-%m-%d").date()
-        if date_from_env
-        else date.today()
-    )
+    try:
+        today = resolve_generation_date(args.today)
+    except (GenerationDateError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     output = args.output if args.output else default_output
     output = output if output.is_absolute() else ROOT / output
     return build_queue(output, today, courses_dir=courses_dir)

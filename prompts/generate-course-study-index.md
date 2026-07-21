@@ -1,5 +1,10 @@
 # Generate a Course-Level Study Index
 
+> **Experimental, pre-1.0 prompt.** The five-file contract and these instructions may change.
+> The public repository does not bundle a generic study-module validator. If the target course
+> has no configured validator, stop rather than claim validation or completion. Do not scale
+> generation beyond a pilot until a validator and independent subject-matter review exist.
+
 ## Prompt
 
 Build a course-level study index for **[unit/course identifier]**, connecting its completed study

@@ -9,13 +9,28 @@ from unittest.mock import patch
 
 from check_public_safety import main
 
+
+REPO_ROOT = Path(__file__).parent.parent
+TEST_TMP = REPO_ROOT / ".test_tmp"
+
+
+def setUpModule():
+    # Keep synthetic repositories inside the disposable public-repository test
+    # boundary, never under the real ignored course-data tree. This module
+    # exclusively owns the shared parent for the duration of its tests.
+    TEST_TMP.mkdir()
+
+
+def tearDownModule():
+    TEST_TMP.rmdir()
+    if TEST_TMP.exists():
+        raise AssertionError(f"temporary test root still exists: {TEST_TMP}")
+
+
 class TestPublicSafety(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory to act as the repo root
-        # Sandbox compliance: use a local .test_tmp directory rather than the system /tmp
-        test_tmp = Path(__file__).parent.parent / ".test_tmp"
-        test_tmp.mkdir(exist_ok=True)
-        self.temp_dir = tempfile.TemporaryDirectory(dir=test_tmp)
+        self.temp_dir = tempfile.TemporaryDirectory(dir=TEST_TMP)
         self.root = Path(self.temp_dir.name)
         
         # Initialize a git repository
@@ -49,10 +64,7 @@ class TestPublicSafety(unittest.TestCase):
         self.patch_call.stop()
         self.patch_stderr.stop()
         self.patch_stdout.stop()
-        try:
-            self.temp_dir.cleanup()
-        except OSError:
-            pass  # Windows sometimes has issues with cleanup, but this is mac
+        self.temp_dir.cleanup()
 
     def _add_file(self, path_str, content=""):
         p = self.root / path_str
@@ -322,6 +334,109 @@ class TestPublicSafety(unittest.TestCase):
         # Should pass
         self.assertEqual(ret, 0)
         self.assertEqual(self.mock_stderr.getvalue(), "")
+
+    def test_different_staged_tool_is_not_a_framework_exemption(self):
+        self._add_file("tools/future.py", 'print("private/notes/")\n')
+        self._git_add("tools/future.py")
+
+        ret = main()
+        self.assertEqual(ret, 1)
+        self.assertIn("tools/future.py:1", self.mock_stderr.getvalue())
+        self.assertIn("public non-framework files reference private/ paths", self.mock_stderr.getvalue())
+
+    def test_different_tool_working_tree_edit_remains_scanned(self):
+        self._add_file("tools/future.py", 'print("public helper")\n')
+        self._git_add("tools/future.py")
+        self._git_commit()
+        self._add_file("tools/future.py", 'print("private/working-tree-leak")\n')
+
+        ret = main()
+        self.assertEqual(ret, 1)
+        self.assertIn("tools/future.py:1", self.mock_stderr.getvalue())
+        self.assertIn("working tree", self.mock_stderr.getvalue())
+
+    def test_staged_http_urls_with_path_shaped_segments_are_allowed(self):
+        self._add_file(
+            "courses/urls.md",
+            "\n".join(
+                (
+                    "https://github.com/xichia/course-notes.git",
+                    "[guide](https://example.invalid/docs/C:/Users/name/guide)",
+                    "https://example.invalid/path/Users/name/guide",
+                    "https://example.invalid/path?next=C:/Users/name/guide",
+                    "https://example.invalid/path?x=1&next=C:/Users/name/guide",
+                    "https://example.invalid/path#C:/Users/name/guide",
+                    "(https://example.invalid/a_(b)/guide).",
+                )
+            ),
+        )
+        self._git_add("courses/urls.md")
+
+        ret = main()
+        self.assertEqual(ret, 0)
+        self.assertEqual(self.mock_stderr.getvalue(), "")
+
+    def test_staged_real_local_paths_and_url_adjacent_windows_path_fail(self):
+        self._add_file(
+            "courses/local-paths.md",
+            "\n".join(
+                (
+                    "/Users/name/course-notes",
+                    "/home/name/course-notes",
+                    r"C:\Users\name\course-notes",
+                    "C:/Users/name/course-notes",
+                    "file:///Users/name/course-notes",
+                    "file:///C:/Users/name/course-notes",
+                    r"https://example.invalid/path\C:\Users\name\course-notes",
+                )
+            ),
+        )
+        self._git_add("courses/local-paths.md")
+
+        ret = main()
+        self.assertEqual(ret, 1)
+        stderr = self.mock_stderr.getvalue()
+        self.assertIn("tracked/staged files contain absolute local paths", stderr)
+        self.assertIn("/Users/name/course-notes", stderr)
+        self.assertIn(r"C:\Users\name\course-notes", stderr)
+        self.assertIn("file:///C:/Users/name/course-notes", stderr)
+
+    def test_staged_punctuation_adjacent_drive_roots_fail_for_all_delimiters(self):
+        lines = []
+        for delimiter in (",", ";", ".", "!"):
+            lines.append(
+                f"https://example.invalid/path{delimiter}C:\\Users\\name\\course-notes"
+            )
+            lines.append(
+                f"https://example.invalid/path{delimiter}D:/Users/name/course-notes"
+            )
+        self._add_file("courses/punctuation-paths.md", "\n".join(lines))
+        self._git_add("courses/punctuation-paths.md")
+
+        ret = main()
+        self.assertEqual(ret, 1)
+        stderr = self.mock_stderr.getvalue()
+        self.assertIn("tracked/staged files contain absolute local paths", stderr)
+        for delimiter in (",", ";", ".", "!"):
+            self.assertIn(f"{delimiter}C:\\Users\\name\\course-notes", stderr)
+            self.assertIn(f"{delimiter}D:/Users/name/course-notes", stderr)
+
+    def test_working_tree_punctuation_adjacent_drive_roots_are_caught(self):
+        self._add_file("courses/punctuation-working.md", "clean content\n")
+        self._git_add("courses/punctuation-working.md")
+        self._git_commit()
+        self._add_file(
+            "courses/punctuation-working.md",
+            r"https://example.invalid/path,C:\Users\name\course-notes" "\n"
+            "https://example.invalid/path;D:/Users/name/course-notes\n",
+        )
+
+        ret = main()
+        self.assertEqual(ret, 1)
+        stderr = self.mock_stderr.getvalue()
+        self.assertIn("working tree", stderr)
+        self.assertIn(r"C:\Users\name\course-notes", stderr)
+        self.assertIn("D:/Users/name/course-notes", stderr)
 
     def test_binary_files_skipped_safely(self):
         # Write a binary file

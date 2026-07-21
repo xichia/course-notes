@@ -28,20 +28,22 @@ This runs the private-note equivalents of validation, manifest generation, and r
 
 ## 2. Public notes and framework changes
 
-For tracked notes and framework files, run:
+For a non-mutating validation and test pass, run:
 
 ```bash
-make all
+make check
 ```
 
-This:
+This validates public notes and runs the regression suite without rebuilding files. When source
+notes have changed and generated public views should be refreshed, run:
 
-1. validates public notes;
-2. rebuilds `manifest.json`;
-3. rebuilds `REVIEW_QUEUE.md`;
-4. runs the regression suite.
+```bash
+make refresh
+```
 
-Generated files should be rebuilt through supported commands, not edited manually.
+`make refresh` is intentionally mutating. `make all` remains the backward-compatible combined
+refresh-and-test command. Generated files should be rebuilt through supported commands, not
+edited manually.
 
 ---
 
@@ -72,8 +74,10 @@ This is moderate accidental-publication protection. It does not establish copyri
 A useful pre-commit sequence is:
 
 ```bash
-make all
+make check
+make refresh
 make public-safety
+make verify-generated
 git diff --check
 git status --short
 git diff --cached --name-status
@@ -141,7 +145,8 @@ Do not change metadata merely to make validation pass. The content itself must s
 After promotion:
 
 ```bash
-make all
+make refresh
+make check
 make public-safety
 ```
 
@@ -293,7 +298,7 @@ CI runs on pushes and pull requests.
 It:
 
 1. runs the canonical public-safety gate;
-2. rebuilds public generated files;
+2. regenerates both public views from the HEAD commit timestamp;
 3. checks that the committed generated files were current.
 
 A local passing result does not mean CI has already passed. After pushing, inspect the remote workflow before describing the release as green.
@@ -341,7 +346,8 @@ make review
 After editing tracked notes:
 
 ```bash
-make all
+make refresh
+make check
 ```
 
 Before committing or pushing:

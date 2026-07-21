@@ -1,8 +1,33 @@
 PYTHON ?= python3
 
-.PHONY: validate validate-public manifest review test all pre-release reviewed \
+.PHONY: help check refresh verify-generated validate validate-public manifest review test all pre-release reviewed \
         study-validate study-manifest study-review study-all study-reviewed public-safety \
         install-hooks uninstall-hooks
+
+help:
+	@echo "Course Notes targets:"
+	@echo "  check             Validate public notes and run tests (non-mutating)"
+	@echo "  refresh           Validate and rebuild manifest.json and REVIEW_QUEUE.md"
+	@echo "  verify-generated  Rebuild public views from the HEAD timestamp and check for drift"
+	@echo "  all               Refresh public views and run tests"
+	@echo "  public-safety     Run publication-safety checks and tests"
+	@echo "  study-all         Validate and refresh schema-based private notes"
+	@echo "  install-hooks     Install the optional managed Git hooks"
+	@echo "  uninstall-hooks   Remove only hooks managed by this project"
+
+check:
+	$(PYTHON) validate_notes.py
+	$(PYTHON) -m unittest discover -s tests -v
+
+refresh:
+	$(PYTHON) validate_notes.py
+	$(PYTHON) build_manifest.py
+	$(PYTHON) build_review_queue.py
+
+verify-generated:
+	@SOURCE_DATE_EPOCH="$$(git log -1 --format=%ct HEAD)" $(PYTHON) build_manifest.py
+	@SOURCE_DATE_EPOCH="$$(git log -1 --format=%ct HEAD)" $(PYTHON) build_review_queue.py
+	@git diff --exit-code -- manifest.json REVIEW_QUEUE.md
 
 validate:
 	$(PYTHON) validate_notes.py
@@ -28,9 +53,7 @@ reviewed:
 	$(PYTHON) mark_reviewed.py $(NOTE) $(DATE:%=--date %)
 
 all:
-	$(PYTHON) validate_notes.py
-	$(PYTHON) build_manifest.py
-	$(PYTHON) build_review_queue.py
+	$(MAKE) refresh
 	$(PYTHON) -m unittest discover -s tests -v
 
 study-validate:

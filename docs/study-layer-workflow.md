@@ -1,5 +1,11 @@
 # Study-Layer Workflow
 
+> **Experimental, pre-1.0 workflow.** The contract and prompts are experimental. The public
+> repository does not bundle a generic study-module validator. If no course-specific validator
+> is configured, an executor must stop rather than claim validation. Do not scale module
+> generation until one pilot module, a working validator, and independent subject-matter review
+> are in place.
+
 The study layer is a second, heavier-weight workflow for turning a curated private source pack
 into a structured, self-testing revision system for one unit — distinct from the lighter
 concept-note system described in the root [`README.md`](../README.md). Where a concept note

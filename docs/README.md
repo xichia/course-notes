@@ -6,6 +6,7 @@ This directory contains the operational guides for the course-notes system. Cour
 
 | Guide | Use it when |
 |---|---|
+| [Adopting the framework](adopting-the-framework.md) | Maintaining a personal copy, preserving upstream, and backing up ignored work |
 | [Course onboarding](course-onboarding.md) | Adding real material under ignored `private/courses/` before any separate public promotion |
 | [Course import friction test](friction-test.md) | Checking whether a newly imported course is quick to navigate, study, and update |
 | [LLM guide](../LLM_GUIDE.md) | Giving an LLM the repository's retrieval, evidence, and editing rules |
@@ -39,13 +40,14 @@ Reusable LLM prompts live under [prompts/README.md](../prompts/README.md). Begin
 
 ## Maintenance
 
-Run the complete check after editing notes, documentation, templates, prompts, or scripts:
+Run the non-mutating check after editing notes, documentation, templates, prompts, or scripts:
 
 ```bash
-make all
+make check
 ```
 
-Generated files are committed for convenient GitHub and LLM access, but they must be rebuilt rather than edited manually.
+Use `make refresh` when generated public views should be updated. Generated files are committed
+for convenient GitHub and LLM access, but they must be rebuilt rather than edited manually.
 
 ## Optional pre-commit hook
 

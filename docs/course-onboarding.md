@@ -1,103 +1,83 @@
 # Course Onboarding
 
-Use this checklist from the repository root. Replace `course-code` with a short lowercase identifier used consistently in paths and frontmatter. Once a note receives an ID, keep that ID stable.
+Real, unsanitized course material belongs under the ignored private workspace. Keep
+`visibility: private`, retain a conservative `source-risk`, and leave unknown administrative
+facts explicitly unknown.
 
-Before starting, gather the official unit outline or syllabus, assessment information, course-resource locations, and any lecture material you already have. Missing information should remain visibly unknown.
+> The outer public repository does not track or back up private work. Set up an independent
+> encrypted backup before adding irreplaceable material.
 
-Real, unsanitized course material belongs under the Git-ignored `private/courses/` workspace, not tracked `courses/`. It defaults to `visibility: private`. Keep `source-risk: unknown` unless provenance is known, and use a course-derived risk such as `lecture-derived` where applicable. Do not classify material as open-licensed without explicit licence evidence. The tracked `courses/` tree is only for material already approved for public inclusion.
+## Manual onboarding
 
-## 1. Create the Course Structure
+Choose a conservative lowercase course slug such as `fluid-mechanics`. Confirm that its final
+directory does not already exist; never merge this setup into an existing course directory.
 
-```bash
-mkdir -p private/courses/course-code/concepts
-mkdir -p private/courses/course-code/lectures
-mkdir -p private/courses/course-code/problem-sheets
-mkdir -p private/courses/course-code/exam
-```
-
-Optionally add a short `private/courses/course-code/README.md` for human navigation and `private/courses/course-code/glossary.md` when terminology begins to accumulate.
-
-## 2. Add `course.md`
+The following commands are for a POSIX shell on macOS or Linux. Run them as one block: the `&&`
+chain stops on the first failure, so no later command runs. On Windows, create the same directories
+and copies with PowerShell or File Explorer while preserving the same refusal of an existing
+destination.
 
 ```bash
-cp templates/course.md private/courses/course-code/course.md
-```
-
-- Replace `course-code` in the path, `id`, `course`, and body.
-- Record the real title, term, lecturer, assessment structure, exam date when known, and official resources.
-- Leave unknown values explicit; do not ask an LLM to fill administrative facts from guesswork.
-- Keep weak areas and priorities evidence-based. They can start as not yet recorded.
-
-## 3. Add `syllabus.md`
-
-```bash
+mkdir -p private/courses && \
+mkdir private/courses/course-code && \
+mkdir private/courses/course-code/concepts private/courses/course-code/lectures && \
+mkdir private/courses/course-code/problem-sheets private/courses/course-code/exam && \
+cp templates/course.md private/courses/course-code/course.md && \
 cp templates/syllabus.md private/courses/course-code/syllabus.md
 ```
 
-- Copy or faithfully summarize official learning outcomes.
-- Map weekly and assessment topics only from authoritative material.
-- Record exam coverage, exclusions, and lecturer hints with source context.
-- Put uncertain claims under `Unclear or Unconfirmed` instead of silently resolving them.
+The second command intentionally fails if `private/courses/course-code/` already exists. The
+resulting layout is:
 
-## 4. Add Raw Lecture Notes
-
-For each lecture:
-
-```bash
-cp templates/lecture.md private/courses/course-code/lectures/yyyy-mm-dd-topic.md
+```text
+private/courses/course-code/
+├── concepts/
+├── lectures/
+├── problem-sheets/
+├── exam/
+├── course.md
+└── syllabus.md
 ```
 
-- Replace all placeholders and give the lecture a stable, unique ID.
-- Preserve chronology, rough wording, notation, and source references.
-- Use `status: reference` when the lecture is a source record rather than material to schedule directly.
-- Mark incomplete or uncertain material under `Unclear or Verify`.
-- Never rewrite the raw lecture file merely to make a concept note cleaner.
+Open both copied files in an editor. Replace every `course-code`, `Course Title`, and term or
+administrative placeholder consistently. Keep `visibility: private` and a conservative
+`source-risk` unless verified evidence supports a more specific value. Once both required note
+files exist and their placeholders have been replaced, run:
 
-## 5. Extract Durable Concept Notes
+```bash
+make study-all
+```
 
-Use `prompts/import-lecture.md` with the raw lecture path. By default, the LLM should propose an extraction plan and stop before creating files.
+This validates and refreshes lightweight private notes; it does not configure Git, a remote, or
+a backup.
 
-- Update an existing concept when `manifest.json` shows a genuine match.
-- Create a new concept only for a substantial, reusable idea.
-- Copy `TEMPLATE.md` for an approved new concept.
-- Preserve the lecture path or precise slide/timestamp reference in `source`.
-- Keep unclear definitions, examples, or relationships visibly marked for verification.
+## Record authoritative course information
 
-## 6. Add Problem-Sheet Notes
+In `course.md`, replace unknowns only when an official source supports the value. Record the
+real title, term, lecturer, assessment structure, dates, and resource references without
+guessing.
 
-Put attempts and corrections under `private/courses/course-code/problem-sheets/` with `type: problem-sheet`.
+In `syllabus.md`, copy or faithfully summarize official outcomes and coverage. Put uncertain
+claims under `Unclear or Unconfirmed`. AI rewriting does not make restricted material public.
 
-- Preserve the original question reference and your attempted method.
-- Separate the attempt, correction, and reflection.
-- Record a structured Mistake Log entry only when an actual error occurred.
-- Link to concept notes only after their IDs exist.
+## Add private study material
 
-## 7. Add Exam Information
+- Preserve rough source records under `lectures/`.
+- Extract durable, one-concept notes under `concepts/` using `TEMPLATE.md`.
+- Keep attempts and corrections under `problem-sheets/`.
+- Put verified exam-format maps or revision summaries under `exam/`.
+- Preserve source references, uncertainty, and stable note IDs.
 
-Put exam maps, confirmed format information, and revision summaries under `private/courses/course-code/exam/`.
-
-- Map official outcomes or assessment topics to existing note IDs.
-- Record the source and date for exam-format claims.
-- Keep unconfirmed rumours or assumptions out of the exam map.
-
-## 8. Validate
+For a non-generating validation check between edits, run:
 
 ```bash
 make study-validate
 ```
 
-Fix missing metadata, duplicate or unstable IDs, broken links, malformed mistakes, and course-directory mismatches before continuing.
+These targets cover Markdown notes using the lightweight schema. They are not generic validators
+for raw attachments, LMS imports, source packs, or experimental five-file study modules.
 
-## 9. Rebuild the Study Views
-
-```bash
-make study-manifest
-make study-review
-make test
-```
-
-Or run the complete private-study workflow with `make study-all`, then `make test`.
-
-To propose a public candidate later, sanitize a copy into `courses/course-code/`, assign an allowed public `visibility` and `source-risk`, and follow the [public release checklist](public-release-checklist.md). Do not put a real course's first or working copy in `courses/`.
-
-After the first import, work through the [course import friction test](friction-test.md). If retrieval or updating feels slow, improve navigation and source references before adding more tooling.
+To create a public candidate later, separately sanitize a derivative into `courses/`, assign an
+honest allowed publication classification, and complete the
+[public-release checklist](public-release-checklist.md). Keeping a file private is not itself
+sanitization.

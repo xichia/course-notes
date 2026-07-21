@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
 from studylib import (
+    GenerationDateError,
     ROOT,
     STUDY_DIR,
     display_path,
@@ -107,7 +109,7 @@ def build_manifest(output: Path, courses_dir: Path | None = None) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=None, help="output JSON path")
     parser.add_argument(
@@ -115,12 +117,16 @@ def main() -> int:
         action="store_true",
         help="scan private/courses/ and write private/manifest.json",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     courses_dir = STUDY_DIR if args.study else None
     output = args.output if args.output else (ROOT / "private" / "manifest.json" if args.study else ROOT / "manifest.json")
     output = output if output.is_absolute() else ROOT / output
-    return build_manifest(output, courses_dir=courses_dir)
+    try:
+        return build_manifest(output, courses_dir=courses_dir)
+    except GenerationDateError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

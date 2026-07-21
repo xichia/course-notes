@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -98,9 +99,10 @@ FRONTMATTER_RE = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MARKDOWN_LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(([^)\n]+)\)")
+HTTP_URL_RE = re.compile(r"https?://", re.IGNORECASE)
 RAW_LOCAL_PATH_RE = re.compile(
     r"(?:file:" r"//[^\s)`>]+|/" r"Users/[^\s)`>]+|/home/[^\s)`>]+|/private/[^\s)`>]+|"
-    r"~/[^\s)`>]+|[A-Za-z]:[\\/][^\s)`>]+)"
+    r"~/[^\s)`>]+|(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s)`>]+)"
 )
 
 
@@ -155,7 +157,15 @@ def _parse_list(value: str) -> list[str]:
 
 
 def _parse_scalar(value: str) -> str:
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid double-quoted string: {exc.msg}") from exc
+        if not isinstance(parsed, str):
+            raise ValueError("double-quoted scalar must decode to a string")
+        return parsed
+    if len(value) >= 2 and value[0] == value[-1] == "'":
         return value[1:-1]
     return value
 
@@ -259,6 +269,40 @@ def is_absolute_local_target(target: str) -> bool:
     )
 
 
+def mask_http_urls(text: str) -> str:
+    """Replace HTTP/HTTPS URL spans with spaces while preserving offsets.
+
+    Balanced parentheses, brackets, and braces may occur inside a URL. An
+    unmatched closing delimiter belongs to surrounding prose or Markdown and
+    ends the span; a backslash also ends the URL before a Windows path.
+    """
+    masked = list(text)
+    pairs = {")": "(", "]": "[", "}": "{"}
+    openers = set(pairs.values())
+    masked_until = 0
+    for match in HTTP_URL_RE.finditer(text):
+        if match.start() < masked_until:
+            continue
+        stack: list[str] = []
+        end = match.end()
+        while end < len(text):
+            character = text[end]
+            if character.isspace() or character in "<>'\"`\\":
+                break
+            if character in ",;.!" and re.match(r"[A-Za-z]:[\\/]", text[end + 1:]):
+                break
+            if character in openers:
+                stack.append(character)
+            elif character in pairs:
+                if not stack or stack[-1] != pairs[character]:
+                    break
+                stack.pop()
+            end += 1
+        masked[match.start():end] = " " * (end - match.start())
+        masked_until = end
+    return "".join(masked)
+
+
 def portability_issues(text: str, file: str) -> list[Issue]:
     """Flag links and raw paths that only work on one machine."""
     issues = []
@@ -275,7 +319,8 @@ def portability_issues(text: str, file: str) -> list[Issue]:
                 )
             )
 
-    for match in RAW_LOCAL_PATH_RE.finditer(text):
+    masked_text = mask_http_urls(text)
+    for match in RAW_LOCAL_PATH_RE.finditer(masked_text):
         if any(start <= match.start() < end for start, end in link_spans):
             continue
         value = match.group(0)
@@ -877,14 +922,24 @@ def display_path(path: Path) -> str:
         return str(path)
 
 
+class GenerationDateError(ValueError):
+    """Raised when a requested reproducible generation date is invalid."""
+
+
 def generation_date() -> date:
     """Return the preferred generation date, respecting SOURCE_DATE_EPOCH for reproducibility."""
     epoch = os.environ.get("SOURCE_DATE_EPOCH")
     if epoch is not None:
+        if not re.fullmatch(r"[0-9]+", epoch):
+            raise GenerationDateError(
+                "SOURCE_DATE_EPOCH must be a non-negative integer Unix timestamp"
+            )
         try:
             return datetime.fromtimestamp(int(epoch), tz=timezone.utc).date()
-        except (ValueError, OSError):
-            pass
+        except (OverflowError, ValueError, OSError) as exc:
+            raise GenerationDateError(
+                "SOURCE_DATE_EPOCH is outside the timestamp range supported on this platform"
+            ) from exc
     return date.today()
 
 

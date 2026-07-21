@@ -1,14 +1,18 @@
 import json
+import os
+import re
 import subprocess
 import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from build_manifest import GENERATED_WARNING as MANIFEST_WARNING, build_manifest
 from build_review_queue import GENERATED_WARNING as REVIEW_WARNING, build_queue, is_review_candidate, rank_note
 from mark_reviewed import mark_reviewed
 from studylib import (
+    GenerationDateError,
     ROOT,
     Note,
     format_issue,
@@ -18,6 +22,7 @@ from studylib import (
     mistake_summary,
     parse_frontmatter,
     parse_mistake_log,
+    portability_issues,
     practice_question_counts,
     validate_repository,
 )
@@ -159,6 +164,62 @@ class StudyLibTests(unittest.TestCase):
         self.assertIn("Do not invent missing definitions", prompt)
         self.assertIn("Stop and ask for approval", prompt)
 
+        onboarding = (ROOT / "docs" / "course-onboarding.md").read_text(encoding="utf-8")
+        self.assertIn("## Manual onboarding", onboarding)
+        self.assertIn("make study-all", onboarding)
+
+        project_state = (ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8")
+        self.assertIn("Automated course initialization remains deferred", project_state)
+
+    def test_published_onboarding_block_refuses_existing_course_without_later_writes(self):
+        onboarding = (ROOT / "docs" / "course-onboarding.md").read_text(encoding="utf-8")
+        manual_section = onboarding.split("## Manual onboarding\n", 1)[1].split(
+            "\n## Record authoritative course information", 1
+        )[0]
+        shell_blocks = re.findall(r"```bash\n(.*?)\n```", manual_section, flags=re.DOTALL)
+        self.assertEqual(2, len(shell_blocks))
+        published_creation_block = shell_blocks[0]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture_root = Path(temp_dir)
+            templates = fixture_root / "templates"
+            templates.mkdir()
+            templates.joinpath("course.md").write_text("template course\n", encoding="utf-8")
+            templates.joinpath("syllabus.md").write_text("template syllabus\n", encoding="utf-8")
+
+            course_dir = fixture_root / "private" / "courses" / "course-code"
+            course_dir.mkdir(parents=True)
+            course_file = course_dir / "course.md"
+            sentinel = "existing course sentinel\n"
+            course_file.write_text(sentinel, encoding="utf-8")
+            course_identity = (course_dir.stat().st_dev, course_dir.stat().st_ino)
+            course_file_identity = (course_file.stat().st_dev, course_file.stat().st_ino)
+
+            later_paths = (
+                course_dir / "syllabus.md",
+                course_dir / "concepts",
+                course_dir / "lectures",
+                course_dir / "problem-sheets",
+                course_dir / "exam",
+            )
+            self.assertTrue(all(not path.exists() for path in later_paths))
+
+            result = subprocess.run(
+                ["/bin/sh", "-c", published_creation_block],
+                cwd=fixture_root,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertEqual(course_identity, (course_dir.stat().st_dev, course_dir.stat().st_ino))
+            self.assertEqual(
+                course_file_identity,
+                (course_file.stat().st_dev, course_file.stat().st_ino),
+            )
+            self.assertEqual(sentinel, course_file.read_text(encoding="utf-8"))
+            self.assertTrue(all(not path.exists() for path in later_paths))
+
     def test_allowed_publication_metadata_values(self):
         visibilities = ("private", "public-framework", "public-original", "public-open-licensed")
         source_risks = (
@@ -279,6 +340,96 @@ class StudyLibTests(unittest.TestCase):
         self.assertIn(f'"{machine_path}"', message)
         self.assertIn("replace it with a path relative to this Markdown file", message)
 
+    def test_https_clone_url_is_not_mistaken_for_windows_path(self):
+        self.assertEqual(
+            [],
+            portability_issues(
+                "git clone https://github.com/example/course-notes.git",
+                "README.md",
+            ),
+        )
+
+    def test_http_url_spans_with_local_path_shapes_are_not_reported(self):
+        text = " ".join(
+            (
+                "https://github.com/xichia/course-notes.git",
+                "https://example.invalid/docs/C:/Users/name/guide",
+                "https://example.invalid/path/Users/name/guide",
+                "(https://example.invalid/a:b/c),",
+                "(https://example.invalid/a_(b)/Users/name/guide),",
+                "[guide](https://example.invalid/C:/Users/name/guide)",
+            )
+        )
+        self.assertEqual([], portability_issues(text, "README.md"))
+
+    def test_real_local_paths_are_reported(self):
+        paths = (
+            "/Users/name/course-notes",
+            "/home/name/course-notes",
+            r"C:\Users\name\course-notes",
+            "C:/Users/name/course-notes",
+            "file:///Users/name/course-notes",
+            "file:///C:/Users/name/course-notes",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                issues = portability_issues(f"Open {path} now", "README.md")
+                self.assertTrue(issues)
+                self.assertIn(path, issues[0].message)
+
+    def test_url_masking_preserves_adjacent_paths_and_line_numbers(self):
+        text = (
+            "https://example.invalid/docs/C:/Users/name/guide\n"
+            r"https://example.invalid/path\C:\Users\name\course-notes"
+            " and /Users/other/course-notes"
+        )
+        issues = portability_issues(text, "README.md")
+        self.assertEqual(2, len(issues))
+        self.assertTrue(all("line 2" in issue.message for issue in issues))
+        self.assertTrue(any(r"C:\Users\name\course-notes" in issue.message for issue in issues))
+        self.assertTrue(any("/Users/other/course-notes" in issue.message for issue in issues))
+
+    def test_punctuation_adjacent_drive_roots_end_url_spans(self):
+        for delimiter in (",", ";", ".", "!"):
+            for separator in ("\\", "/"):
+                local_path = f"C:{separator}Users{separator}name{separator}course-notes"
+                text = f"https://example.invalid/path{delimiter}{local_path}"
+                with self.subTest(delimiter=delimiter, separator=separator):
+                    issues = portability_issues(text, "README.md")
+                    self.assertEqual(1, len(issues))
+                    self.assertIn(local_path, issues[0].message)
+                    self.assertIn("line 1", issues[0].message)
+
+    def test_structural_url_drive_shapes_remain_masked(self):
+        urls = (
+            "https://example.invalid/docs/C:/Users/name/guide",
+            "https://example.invalid/path?next=C:/Users/name/guide",
+            "https://example.invalid/path?x=1&next=C:/Users/name/guide",
+            "https://example.invalid/path#C:/Users/name/guide",
+        )
+        self.assertEqual([], portability_issues(" ".join(urls), "README.md"))
+
+    def test_url_punctuation_parentheses_and_multiple_paths_on_one_line(self):
+        text = (
+            "(https://example.invalid/a_(b)/guide). "
+            r"https://example.invalid/path,C:\Users\one\course-notes "
+            "https://example.invalid/path#C:/Users/url/guide "
+            "https://example.invalid/path!D:/Users/two/course-notes"
+        )
+        issues = portability_issues(text, "README.md")
+        self.assertEqual(2, len(issues))
+        self.assertTrue(all("line 1" in issue.message for issue in issues))
+        self.assertTrue(any(r"C:\Users\one\course-notes" in issue.message for issue in issues))
+        self.assertTrue(any("D:/Users/two/course-notes" in issue.message for issue in issues))
+
+    def test_file_url_markdown_destination_is_still_local(self):
+        issues = portability_issues(
+            "[local](file:///C:/Users/name/course-notes)",
+            "README.md",
+        )
+        self.assertEqual(1, len(issues))
+        self.assertIn("absolute local target", issues[0].message)
+
     def test_invalid_status_message_names_value_and_allowed_values(self):
         text = VALID_TEXT.replace("status: learning", "status: partial")
         issues = validate_repository([make_note(text)])
@@ -390,12 +541,19 @@ class StudyLibTests(unittest.TestCase):
             self.assertTrue(any("does not exist" in issue.message for issue in issues), link_messages)
 
     def test_generation_date_respects_source_date_epoch(self):
-        import os
-        try:
-            os.environ["SOURCE_DATE_EPOCH"] = "1704067200"
+        with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1704067200"}, clear=True):
             self.assertEqual(date(2024, 1, 1), generation_date())
-        finally:
-            os.environ.pop("SOURCE_DATE_EPOCH", None)
+
+    def test_generation_date_restores_preexisting_environment_value(self):
+        with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "pre-existing"}, clear=False):
+            with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1704067200"}, clear=False):
+                self.assertEqual(date(2024, 1, 1), generation_date())
+            self.assertEqual("pre-existing", os.environ["SOURCE_DATE_EPOCH"])
+
+    def test_generation_date_rejects_invalid_epoch(self):
+        with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "invalid"}, clear=True):
+            with self.assertRaisesRegex(GenerationDateError, "SOURCE_DATE_EPOCH"):
+                generation_date()
 
     def test_generation_date_date_only_in_manifest(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as temp_dir:

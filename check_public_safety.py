@@ -36,7 +36,7 @@ import subprocess
 import sys
 import re
 
-from studylib import ROOT, RAW_LOCAL_PATH_RE
+from studylib import ROOT, RAW_LOCAL_PATH_RE, mask_http_urls
 
 # Self-referential files that legitimately contain the blocked patterns as
 # literal string fixtures (this checker's own implementation and its tests).
@@ -207,12 +207,21 @@ def _scan_content(text: str, path_str: str, patterns: list[str], origin: str = "
     return hits
 
 
-def _scan_regex(text: str, path_str: str, pattern: re.Pattern[str], origin: str = "") -> list[str]:
+def _scan_regex(
+    text: str,
+    path_str: str,
+    pattern: re.Pattern[str],
+    origin: str = "",
+    *,
+    scan_text: str | None = None,
+) -> list[str]:
     """Scan *text* line by line for *pattern*. Returns formatted hit strings."""
     hits = []
     tag = f" [{origin}]" if origin else ""
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        if pattern.search(line):
+    source_lines = text.splitlines()
+    scanned_lines = (scan_text if scan_text is not None else text).splitlines()
+    for lineno, (line, scanned_line) in enumerate(zip(source_lines, scanned_lines), start=1):
+        if pattern.search(scanned_line):
             hits.append(f"    {path_str}:{lineno}{tag}: {line.strip()}")
     return hits
 
@@ -273,7 +282,13 @@ def main() -> int:
             # legitimately define/test this exact pattern: a machine-local
             # path is a leak wherever else it appears.
             if path_str not in LOCAL_PATH_PATTERN_EXCLUSIONS:
-                for hit_str in _scan_regex(text, path_str, RAW_LOCAL_PATH_RE, origin):
+                for hit_str in _scan_regex(
+                    text,
+                    path_str,
+                    RAW_LOCAL_PATH_RE,
+                    origin,
+                    scan_text=mask_http_urls(text),
+                ):
                     if hit_str not in local_hits:
                         local_hits.append(hit_str)
 

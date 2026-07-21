@@ -1,8 +1,9 @@
 # Repository Layout
 
-This repository uses a **one-folder workflow**: a single working copy, a single
-Git history, and a single public remote. Public-safe and private material are
-separated by directory and Git tracking, not by repository.
+This repository uses a **one-workspace workflow**. The outer Git repository has one public
+history and tracks the framework plus public-safe content. The ignored `private/` directory may
+live inside that workspace, but its contents are not part of the outer repository, its history,
+its remote, or its clones.
 
 ## Directory map
 
@@ -55,7 +56,8 @@ The entire `private/` directory is ignored by Git (see the `private/` rule in
 - `private/drafts/` holds work in progress.
 - `private/framework-feedback.md` holds scratch notes about the framework itself.
 
-Because `private/` is Git-ignored, it is never committed and never pushed.
+Because `private/` is Git-ignored by the outer repository, it is never committed or pushed by
+that repository and receives no history or backup from it.
 Keeping material there is **not** sanitization: promoting a private note into
 `courses/` requires an explicit sanitization and review step (see
 [publication policy](publication-policy.md) and the
@@ -81,5 +83,6 @@ Keeping material there is **not** sanitization: promoting a private note into
   `visibility` and `source-risk`, then run the canonical `make public-safety` gate.
 - `make pre-release` is a convenience target that runs that gate and rebuilds the
   public generated files.
-- `private/` is deliberately untracked: back it up independently, since Git
-  provides no history for its contents.
+- `private/` is deliberately untracked by the outer repository: back it up independently. An
+  optional nested private Git repository is a separate advanced arrangement, described in
+  [Adopting the framework](adopting-the-framework.md).

@@ -13,13 +13,25 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
+TEST_TMP = REPO_ROOT / ".test_tmp"
+
+
+def setUpModule():
+    # Keep synthetic Git repositories inside the disposable public-repository
+    # test boundary, never under the real ignored course-data tree. This module
+    # exclusively owns the shared parent for the duration of its tests.
+    TEST_TMP.mkdir()
+
+
+def tearDownModule():
+    TEST_TMP.rmdir()
+    if TEST_TMP.exists():
+        raise AssertionError(f"temporary test root still exists: {TEST_TMP}")
 
 
 class TestHooks(unittest.TestCase):
     def setUp(self):
-        test_tmp = REPO_ROOT / ".test_tmp"
-        test_tmp.mkdir(exist_ok=True)
-        self.temp_dir = tempfile.TemporaryDirectory(dir=test_tmp)
+        self.temp_dir = tempfile.TemporaryDirectory(dir=TEST_TMP)
         self.root = Path(self.temp_dir.name)
 
         subprocess.run(["git", "init", "-b", "main"], cwd=self.root, check=True, capture_output=True)
@@ -32,10 +44,7 @@ class TestHooks(unittest.TestCase):
         shutil.copy(REPO_ROOT / "scripts" / "pre-push", self.root / "scripts" / "pre-push")
 
     def tearDown(self):
-        try:
-            self.temp_dir.cleanup()
-        except OSError:
-            pass
+        self.temp_dir.cleanup()
 
     def _make(self, *targets):
         return subprocess.run(

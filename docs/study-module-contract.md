@@ -1,5 +1,10 @@
 # Study-Module Contract
 
+> **Experimental, pre-1.0 contract.** The contract and prompts may change. The public repository
+> does not bundle a generic study-module validator. If no course-specific validator is
+> configured, an executor must stop rather than claim validation. Do not scale generation until
+> one pilot module, a working validator, and independent subject-matter review exist.
+
 A **study module** is the unit of output for the [study-layer workflow](study-layer-workflow.md):
 a bounded set of exactly five files covering one topic block of a unit, generated from a curated,
 hash-verified private source pack. This document defines the contract every module follows,

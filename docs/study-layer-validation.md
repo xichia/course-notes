@@ -1,5 +1,10 @@
 # Study-Layer Validation Model
 
+> **Experimental, pre-1.0 model.** This describes the intended checks; the public repository
+> does not bundle a generic study-module validator. If no course-specific validator is
+> configured, an executor must stop rather than claim validation. Do not scale module generation
+> until one pilot module, a working validator, and independent subject-matter review exist.
+
 A study module (see [`docs/study-module-contract.md`](study-module-contract.md)) is checked at
 two distinct layers that must not be conflated: **mechanical validation** (structure and
 provenance) and **subject-matter validation** (correctness and quality). This document describes

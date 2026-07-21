@@ -4,6 +4,11 @@ Reusable LLM prompts for common study workflows. Each prompt is a Markdown file 
 
 Most prompts work with a private study repository. Some can also help prepare public-safe content — but only after explicit sanitization.
 
+> The five-file study-module prompts are experimental and pre-1.0. No generic study-module
+> validator is bundled here. An executor must stop rather than claim validation when a target
+> course has no configured validator, and users should not scale generation until a pilot,
+> validator, and independent subject review exist.
+
 ## Prompt Index
 
 | File | When to use | Safe for public work? |
