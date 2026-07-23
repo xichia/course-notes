@@ -11,6 +11,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from studylib import (
+    GeneratedArtifactError,
     GenerationDateError,
     REVIEWABLE_TYPES,
     ROOT,
@@ -274,7 +275,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     output = args.output if args.output else default_output
     output = output if output.is_absolute() else ROOT / output
-    return build_queue(output, today, courses_dir=courses_dir)
+    try:
+        return build_queue(output, today, courses_dir=courses_dir)
+    except GeneratedArtifactError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

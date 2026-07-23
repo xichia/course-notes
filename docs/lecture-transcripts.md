@@ -44,13 +44,15 @@ timestamp-anchored paragraphs. It must not reword, correct, or complete anything
 
 Write the normalized file as `.txt`, not `.md`.
 
-`discover_note_paths()` treats **every** `*.md` under the scanned courses directory
-except `README.md` as a note owing full frontmatter. A normalized transcript written
-as `.md` therefore enters the validation set, fails it, and — because
+`discover_note_paths()` treats every `*.md` under the scanned courses directory as a
+note owing full frontmatter unless it is a `README.md`, sits in a course's `study/`
+module tree, or is declared in that tree's `.generated-artifacts` file — see
+[generated artifacts](generated-artifacts.md). A normalized transcript written as
+`.md` matches none of those, so it enters the validation set, fails it, and — because
 `build_review_queue.py` and `build_manifest.py` refuse to write when validation fails
 — blocks regeneration of the review queue for the whole repository. Choosing `.txt`
-keeps evidence out of the note set. The same reasoning applies to any other generated,
-non-note artifact.
+keeps evidence out of the note set without any declaration at all, which is the right
+answer for a transcript: it is source evidence, not a document the repository authors.
 
 ## Provenance to record
 

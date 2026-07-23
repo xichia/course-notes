@@ -3,7 +3,16 @@
 
 import argparse
 
-from studylib import STUDY_DIR, discover_note_paths, format_issue, has_errors, load_blocklist, validate_repository
+from studylib import (
+    STUDY_DIR,
+    GeneratedArtifactError,
+    discover_generated_artifact_paths,
+    discover_note_paths,
+    format_issue,
+    has_errors,
+    load_blocklist,
+    validate_repository,
+)
 
 
 def main() -> int:
@@ -24,20 +33,26 @@ def main() -> int:
         parser.error("--public-release and --study are mutually exclusive")
 
     courses_dir = STUDY_DIR if args.study else None
-    paths = discover_note_paths(courses_dir=courses_dir)
-    blocklist = load_blocklist() if args.public_release else None
-    issues = validate_repository(public_release=args.public_release, blocklist=blocklist, courses_dir=courses_dir)
+    try:
+        paths = discover_note_paths(courses_dir=courses_dir)
+        artifacts = discover_generated_artifact_paths(courses_dir=courses_dir)
+        blocklist = load_blocklist() if args.public_release else None
+        issues = validate_repository(public_release=args.public_release, blocklist=blocklist, courses_dir=courses_dir)
+    except GeneratedArtifactError as exc:
+        print(f"ERROR: {exc}")
+        return 1
     for issue in issues:
         print(format_issue(issue))
 
     errors = sum(issue.level == "error" for issue in issues)
     warnings = sum(issue.level == "warning" for issue in issues)
-    if has_errors(issues):
-        mode = " study" if args.study else " public-release" if args.public_release else ""
-        print(f"FAILED{mode}: {len(paths)} note(s), {errors} error(s), {warnings} warning(s).")
-        return 1
+    # Report the artifact count so a growing exclusion set stays visible.
+    counted = f"{len(paths)} note(s), {len(artifacts)} generated artifact(s)"
     mode = " study" if args.study else " public-release" if args.public_release else ""
-    print(f"OK{mode}: {len(paths)} note(s), no errors, {warnings} warning(s).")
+    if has_errors(issues):
+        print(f"FAILED{mode}: {counted}, {errors} error(s), {warnings} warning(s).")
+        return 1
+    print(f"OK{mode}: {counted}, no errors, {warnings} warning(s).")
     return 0
 
 

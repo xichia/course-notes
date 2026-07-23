@@ -53,7 +53,10 @@ The entire `private/` directory is ignored by Git (see the `private/` rule in
   intentionally fail `make validate-public`, but that gate never scans it.
   Some courses additionally keep an `admin/announcements/` subfolder with LMS
   announcement captures, and an `lms-import/` subfolder with captured pages,
-  downloaded materials, and the inventories that track them. See
+  downloaded materials, and the inventories that track them. Those captures are
+  generated artifacts, not notes: declare them in `private/courses/.generated-artifacts`
+  so note validation skips them (see
+  [notes and generated artifacts](generated-artifacts.md)). See
   [`prompts/sync-lms-course-content.md`](../prompts/sync-lms-course-content.md)
   for the full sync workflow and
   [`prompts/sync-lms-announcements.md`](../prompts/sync-lms-announcements.md)

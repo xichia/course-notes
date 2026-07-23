@@ -15,6 +15,7 @@ feedback and pilot workflows are incorporated.
 | Local hooks | Implemented, optional | Ownership-aware pre-commit and pre-push scripts; not auto-installed |
 | CI | Implemented | Safety and deterministic-generation checks on Python 3.9 and current 3.x |
 | Course scaffolding | Manual; automated initializer not bundled | Manual onboarding is supported; no initializer ships in this release |
+| Note vs. generated-artifact discovery | Implemented | `docs/generated-artifacts.md`; built-in `study/` rule plus an optional `.generated-artifacts` declaration per courses tree |
 | Study-module contract and prompts | Experimental | Pilot specifications; not a turnkey workflow |
 | Generic study-module validator | Not bundled; deferred | Do not claim mechanical validation without a configured validator |
 | Formal versioned study-module schema | Deferred | Current prose contract remains experimental |

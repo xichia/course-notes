@@ -12,13 +12,17 @@ from build_manifest import GENERATED_WARNING as MANIFEST_WARNING, build_manifest
 from build_review_queue import GENERATED_WARNING as REVIEW_WARNING, build_queue, is_review_candidate, rank_note
 from mark_reviewed import mark_reviewed
 from studylib import (
+    GeneratedArtifactError,
     GenerationDateError,
     ROOT,
     Note,
+    discover_generated_artifact_paths,
+    discover_note_paths,
     format_issue,
     generation_date,
     has_substantive_section,
     load_blocklist,
+    load_generated_artifact_patterns,
     mistake_summary,
     parse_frontmatter,
     parse_mistake_log,
@@ -798,6 +802,208 @@ _None._
             content = path.read_text(encoding="utf-8")
             self.assertIn("visibility: private", content)
             self.assertIn("source-risk: original", content)
+
+
+# A generated study-module artifact: real ones carry no note frontmatter, which is
+# exactly what a malformed note also looks like, so location and declaration --
+# never the absence of frontmatter -- decide what counts as a note.
+STUDY_GUIDE_TEXT = """# Fixture Topic
+
+## 1. Overview
+
+[S] A source-supported statement.
+[E] An explanatory synthesis.
+"""
+
+
+class GeneratedArtifactDiscoveryTests(unittest.TestCase):
+    """Cover the note/generated-artifact boundary in docs/generated-artifacts.md."""
+
+    def _course_tree(self, courses_dir, course="fixture-course"):
+        """Create a synthetic course holding one valid note. Returns the course dir."""
+        course_dir = Path(courses_dir) / course
+        (course_dir / "concepts").mkdir(parents=True)
+        text = VALID_TEXT.replace("course: demo", f"course: {course}").replace(
+            "id: demo-example", "id: fixture-example"
+        )
+        (course_dir / "concepts" / "example.md").write_text(text, encoding="utf-8")
+        return course_dir
+
+    def _study_module(self, course_dir, topic="fixture-topic"):
+        module = course_dir / "study" / topic
+        module.mkdir(parents=True)
+        for name in ("STUDY_GUIDE.md", "QUESTION_BANK.md", "ANSWER_KEY.md", "COVERAGE_MATRIX.md"):
+            (module / name).write_text(STUDY_GUIDE_TEXT, encoding="utf-8")
+        return module
+
+    def test_study_module_artifacts_do_not_fail_note_validation(self):
+        """The original failure: contract files were validated as frontmatter-less notes."""
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            self._study_module(course_dir)
+            courses_dir = Path(courses)
+
+            notes = discover_note_paths(courses_dir=courses_dir)
+            artifacts = discover_generated_artifact_paths(courses_dir=courses_dir)
+            self.assertEqual(["example.md"], [p.name for p in notes])
+            self.assertEqual(4, len(artifacts))
+
+            issues = validate_repository(courses_dir=courses_dir)
+            self.assertEqual([], [format_issue(i) for i in issues if i.level == "error"])
+
+    def test_course_level_study_layer_output_is_an_artifact(self):
+        """Files directly in <course>/study/ are study-layer output, not notes."""
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            (course_dir / "study").mkdir()
+            (course_dir / "study" / "STUDY_INDEX.md").write_text("# Index\n", encoding="utf-8")
+
+            names = [p.name for p in discover_note_paths(courses_dir=Path(courses))]
+            self.assertEqual(["example.md"], names)
+
+    def test_malformed_note_still_fails_validation(self):
+        """A human-maintained note with broken frontmatter must stay discoverable."""
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            self._study_module(course_dir)
+            broken = course_dir / "concepts" / "broken.md"
+            broken.write_text("# Broken\n\nNo frontmatter at all.\n", encoding="utf-8")
+
+            self.assertIn(broken, discover_note_paths(courses_dir=Path(courses)))
+            issues = validate_repository(courses_dir=Path(courses))
+            errors = [i for i in issues if i.level == "error" and i.file.endswith("broken.md")]
+            self.assertTrue(errors, "a malformed note must still produce an error")
+
+    def test_study_directory_must_be_a_direct_child_of_a_course(self):
+        """A `study` directory nested inside a note directory is not a module tree."""
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            nested = course_dir / "concepts" / "study"
+            nested.mkdir()
+            (nested / "misleading.md").write_text("# Misleading\n", encoding="utf-8")
+
+            names = [p.name for p in discover_note_paths(courses_dir=Path(courses))]
+            self.assertIn("misleading.md", names)
+
+    def test_a_course_named_study_keeps_its_notes(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            self._course_tree(courses, course="study")
+            names = [p.name for p in discover_note_paths(courses_dir=Path(courses))]
+            self.assertEqual(["example.md"], names)
+
+    def test_declaration_file_excludes_named_artifacts(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            (course_dir / "COVERAGE_AUDIT.md").write_text("# Audit\n", encoding="utf-8")
+            (course_dir / "capture").mkdir()
+            (course_dir / "capture" / "SYNC_REPORT.md").write_text("# Sync\n", encoding="utf-8")
+            (Path(courses) / ".generated-artifacts").write_text(
+                "# fixture declaration\n*/COVERAGE_AUDIT.md\n*/capture/**\n", encoding="utf-8"
+            )
+
+            names = [p.name for p in discover_note_paths(courses_dir=Path(courses))]
+            self.assertEqual(["example.md"], names)
+            artifacts = sorted(p.name for p in discover_generated_artifact_paths(courses_dir=Path(courses)))
+            self.assertEqual(["COVERAGE_AUDIT.md", "SYNC_REPORT.md"], artifacts)
+
+    def test_declaration_patterns_cannot_reach_into_note_directories(self):
+        """A course-root pattern must not shadow a same-named file inside concepts/."""
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            (course_dir / "COVERAGE_AUDIT.md").write_text("# Audit\n", encoding="utf-8")
+            (course_dir / "concepts" / "COVERAGE_AUDIT.md").write_text("# Note\n", encoding="utf-8")
+            (Path(courses) / ".generated-artifacts").write_text("*/COVERAGE_AUDIT.md\n", encoding="utf-8")
+
+            notes = discover_note_paths(courses_dir=Path(courses))
+            self.assertIn("concepts", {p.parent.name for p in notes})
+            self.assertEqual(
+                ["COVERAGE_AUDIT.md"],
+                [p.name for p in discover_generated_artifact_paths(courses_dir=Path(courses))],
+            )
+
+    def test_single_star_does_not_cross_a_directory_boundary(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            (course_dir / "reports").mkdir()
+            (course_dir / "reports" / "deep.md").write_text("# Deep\n", encoding="utf-8")
+            (Path(courses) / ".generated-artifacts").write_text("*/*.md\n", encoding="utf-8")
+
+            names = [p.name for p in discover_note_paths(courses_dir=Path(courses))]
+            self.assertIn("deep.md", names)
+
+    def test_readme_files_remain_excluded_without_a_declaration(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            (course_dir / "README.md").write_text("# Navigation\n", encoding="utf-8")
+
+            self.assertEqual(["example.md"], [p.name for p in discover_note_paths(courses_dir=Path(courses))])
+            self.assertEqual([], discover_generated_artifact_paths(courses_dir=Path(courses)))
+
+    def test_catch_all_declaration_patterns_are_refused(self):
+        for pattern in ("*", "**", "*.md", "**/*.md", "**/*", "**/**"):
+            with self.subTest(pattern=pattern):
+                with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+                    self._course_tree(courses)
+                    (Path(courses) / ".generated-artifacts").write_text(pattern + "\n", encoding="utf-8")
+                    with self.assertRaisesRegex(GeneratedArtifactError, "too broad"):
+                        discover_note_paths(courses_dir=Path(courses))
+
+    def test_absolute_and_escaping_declaration_patterns_are_refused(self):
+        cases = {
+            "/fixture-course/**": "relative",
+            "../**": "escape",
+            "fixture-course\\**": r"separators",
+        }
+        for pattern, expected in cases.items():
+            with self.subTest(pattern=pattern):
+                with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+                    self._course_tree(courses)
+                    (Path(courses) / ".generated-artifacts").write_text(pattern + "\n", encoding="utf-8")
+                    with self.assertRaisesRegex(GeneratedArtifactError, expected):
+                        load_generated_artifact_patterns(Path(courses))
+
+    def test_stale_declaration_pattern_is_reported(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            self._course_tree(courses)
+            (Path(courses) / ".generated-artifacts").write_text("*/NEVER_MATCHES.md\n", encoding="utf-8")
+
+            issues = validate_repository(courses_dir=Path(courses))
+            warnings = [i for i in issues if i.level == "warning" and "NEVER_MATCHES" in i.message]
+            self.assertEqual(1, len(warnings), [format_issue(i) for i in issues])
+            self.assertEqual([], [i for i in issues if i.level == "error"])
+
+    def test_comments_and_blank_lines_are_ignored(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            self._course_tree(courses)
+            (Path(courses) / ".generated-artifacts").write_text(
+                "# a comment\n\n   \n*/COVERAGE_AUDIT.md\n", encoding="utf-8"
+            )
+            self.assertEqual(["*/COVERAGE_AUDIT.md"], load_generated_artifact_patterns(Path(courses)))
+
+    def test_builders_run_once_artifacts_are_recognised(self):
+        """Generated artifacts previously blocked manifest and review-queue writes."""
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            self._study_module(course_dir)
+            with tempfile.TemporaryDirectory() as out:
+                manifest = Path(out) / "manifest.json"
+                self.assertEqual(0, build_manifest(manifest, courses_dir=Path(courses)))
+                self.assertEqual(1, len(json.loads(manifest.read_text(encoding="utf-8"))["notes"]))
+
+                queue = Path(out) / "REVIEW_QUEUE.md"
+                self.assertEqual(0, build_queue(queue, date(2026, 6, 20), courses_dir=Path(courses)))
+                self.assertTrue(queue.is_file())
+
+    def test_generated_artifact_contract_is_documented(self):
+        doc = (ROOT / "docs" / "generated-artifacts.md").read_text(encoding="utf-8")
+        for marker in (
+            "## What counts as a note",
+            "## What counts as a generated artifact",
+            "## Declaring artifacts",
+            "## What the contract deliberately does not do",
+        ):
+            self.assertIn(marker, doc)
+        self.assertIn(".generated-artifacts", doc)
 
 
 if __name__ == "__main__":

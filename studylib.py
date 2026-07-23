@@ -73,6 +73,16 @@ PUBLIC_RELEASE_SOURCE_SUSPICIOUS_TERMS = (
 
 BLOCKLIST_FILENAME = ".public-release-blocklist"
 
+# A course's `study/` directory is reserved by docs/study-module-contract.md for
+# generated study modules. Their five contract files intentionally carry no note
+# frontmatter and are checked by a study-module validator, not by note validation.
+STUDY_MODULE_DIRNAME = "study"
+GENERATED_ARTIFACTS_FILENAME = ".generated-artifacts"
+
+# Wildcards broad enough to silence note validation wholesale. Declaring an
+# artifact must be a deliberate, bounded statement, so these are refused.
+CATCH_ALL_ARTIFACT_PATTERNS = frozenset({"*", "**", "*.md", "**/*", "**/*.md", "**/**"})
+
 
 def load_blocklist(path: Path | None = None) -> list[str]:
     """Load the optional public-release blocklist.
@@ -221,16 +231,146 @@ def discover_markdown_paths() -> list[Path]:
     )
 
 
+class GeneratedArtifactError(ValueError):
+    """Raised when a generated-artifact declaration cannot be honoured."""
+
+
+def _artifact_pattern_regex(pattern: str) -> re.Pattern[str]:
+    """Compile one declaration glob against POSIX paths relative to a courses tree.
+
+    ``*`` and ``?`` stay inside a single path segment; ``**`` spans whole segments.
+    """
+    segments = pattern.split("/")
+    compiled = ""
+    for index, segment in enumerate(segments):
+        last = index == len(segments) - 1
+        if segment == "**":
+            compiled += ".*" if last else "(?:[^/]+/)*"
+            continue
+        for character in segment:
+            if character == "*":
+                compiled += "[^/]*"
+            elif character == "?":
+                compiled += "[^/]"
+            else:
+                compiled += re.escape(character)
+        if not last:
+            compiled += "/"
+    return re.compile(rf"\A{compiled}\Z")
+
+
+def load_generated_artifact_patterns(courses_dir: Path | None = None) -> list[str]:
+    """Load a courses tree's optional generated-artifact declaration.
+
+    The file lists one glob per line, relative to the courses directory and using
+    POSIX separators; blank lines and lines starting with ``#`` are ignored. It
+    lives beside the courses it describes so a private tree never has to name its
+    paths in the public repository. Returns an empty list when absent.
+    """
+    dir = courses_dir or COURSES_DIR
+    path = dir / GENERATED_ARTIFACTS_FILENAME
+    if not path.is_file():
+        return []
+    patterns: list[str] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        pattern = line.strip()
+        if not pattern or pattern.startswith("#"):
+            continue
+        where = f"{GENERATED_ARTIFACTS_FILENAME} line {line_number}"
+        if "\\" in pattern:
+            raise GeneratedArtifactError(f"{where}: use '/' separators, not '\\'")
+        if pattern.startswith("/"):
+            raise GeneratedArtifactError(f"{where}: pattern must be relative to the courses directory")
+        if ".." in pattern.split("/"):
+            raise GeneratedArtifactError(f"{where}: pattern must not escape the courses directory with '..'")
+        if pattern in CATCH_ALL_ARTIFACT_PATTERNS:
+            raise GeneratedArtifactError(
+                f"{where}: pattern '{pattern}' is too broad to be a declaration; "
+                "name the generated directory or artifact instead"
+            )
+        patterns.append(pattern)
+    return patterns
+
+
+def is_study_module_path(relative_path: Path) -> bool:
+    """Report whether a courses-relative path sits in a course's study-module tree."""
+    parts = relative_path.parts
+    return len(parts) >= 3 and parts[1] == STUDY_MODULE_DIRNAME
+
+
+def is_generated_artifact(relative_path: Path, patterns: Iterable[str] = ()) -> bool:
+    """Report whether a courses-relative Markdown path is a generated artifact.
+
+    Generated artifacts are outputs of a builder or capture step rather than
+    human-maintained notes, so they carry no note frontmatter and are not held to
+    the note schema. See docs/generated-artifacts.md for the full contract.
+    """
+    if is_study_module_path(relative_path):
+        return True
+    posix = relative_path.as_posix()
+    return any(_artifact_pattern_regex(pattern).match(posix) for pattern in patterns)
+
+
 def discover_note_paths(courses_dir: Path | None = None) -> list[Path]:
-    """Find study documents while excluding navigational README files.
+    """Find human-maintained notes, excluding READMEs and generated artifacts.
 
     ``courses_dir`` may be set to ``STUDY_DIR`` to scan the Git-ignored
-    ``private/courses/`` tree instead of the public ``courses/``.
+    ``private/courses/`` tree instead of the public ``courses/``. Anything not
+    recognised as a generated artifact stays a note, so a malformed note keeps
+    failing validation rather than disappearing from it.
     """
     dir = courses_dir or COURSES_DIR
     if not dir.exists():
         return []
-    return sorted(path for path in dir.rglob("*.md") if path.name.lower() != "readme.md")
+    patterns = load_generated_artifact_patterns(dir)
+    return sorted(
+        path
+        for path in dir.rglob("*.md")
+        if path.name.lower() != "readme.md"
+        and not is_generated_artifact(path.relative_to(dir), patterns)
+    )
+
+
+def discover_generated_artifact_paths(courses_dir: Path | None = None) -> list[Path]:
+    """Find the Markdown a courses tree declares to be generated output."""
+    dir = courses_dir or COURSES_DIR
+    if not dir.exists():
+        return []
+    patterns = load_generated_artifact_patterns(dir)
+    return sorted(
+        path
+        for path in dir.rglob("*.md")
+        if path.name.lower() != "readme.md" and is_generated_artifact(path.relative_to(dir), patterns)
+    )
+
+
+def generated_artifact_declaration_issues(courses_dir: Path | None = None) -> list[Issue]:
+    """Flag declaration patterns that match nothing, so the file cannot drift unnoticed."""
+    dir = courses_dir or COURSES_DIR
+    if not dir.exists():
+        return []
+    patterns = load_generated_artifact_patterns(dir)
+    if not patterns:
+        return []
+    file = (dir / GENERATED_ARTIFACTS_FILENAME).relative_to(ROOT).as_posix()
+    candidates = [
+        path.relative_to(dir).as_posix()
+        for path in dir.rglob("*.md")
+        if path.name.lower() != "readme.md"
+    ]
+    issues = []
+    for pattern in patterns:
+        regex = _artifact_pattern_regex(pattern)
+        if not any(regex.match(candidate) for candidate in candidates):
+            issues.append(
+                Issue(
+                    "warning",
+                    file,
+                    f"generated-artifact pattern '{pattern}': matches no Markdown file; "
+                    "remove the stale pattern or correct it",
+                )
+            )
+    return issues
 
 
 def load_notes(paths: Iterable[Path] | None = None, courses_dir: Path | None = None) -> list[Note]:
@@ -552,8 +692,12 @@ def validate_repository(notes: list[Note] | None = None, public_release: bool = 
     ids: dict[str, str] = {}
     active_courses_dir = courses_dir or COURSES_DIR
 
+    if not supplied_notes:
+        issues.extend(generated_artifact_declaration_issues(active_courses_dir))
+
     if not notes:
-        return [Issue("error", str(active_courses_dir.relative_to(ROOT)) + "/", "no note files found")]
+        issues.append(Issue("error", str(active_courses_dir.relative_to(ROOT)) + "/", "no note files found"))
+        return sorted(issues, key=lambda issue: (issue.file, issue.level != "error", issue.message))
 
     for note in notes:
         for message in note.parse_errors:

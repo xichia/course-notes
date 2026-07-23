@@ -8,7 +8,16 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from studylib import ROOT, STUDY_DIR, discover_note_paths, format_issue, has_errors, parse_frontmatter, validate_repository
+from studylib import (
+    ROOT,
+    STUDY_DIR,
+    GeneratedArtifactError,
+    discover_note_paths,
+    format_issue,
+    has_errors,
+    parse_frontmatter,
+    validate_repository,
+)
 
 REVIEW_CADENCE: dict[str, int] = {
     "new": 1,
@@ -115,7 +124,11 @@ def main() -> int:
     )
     args = parser.parse_args()
     courses_dir = STUDY_DIR if args.study else None
-    return mark_reviewed(args.note_id, args.date, courses_dir=courses_dir)
+    try:
+        return mark_reviewed(args.note_id, args.date, courses_dir=courses_dir)
+    except GeneratedArtifactError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

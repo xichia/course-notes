@@ -23,6 +23,10 @@ Every module uses exactly these five files. A module should not add extra files 
 convenience" — if something doesn't fit one of the five, it usually belongs inside one of them,
 or it's evidence the module's scope is too broad.
 
+The `study/` directory is reserved: note validation treats everything under it as generated
+output rather than as notes owing frontmatter, so a module's Markdown is never held to the note
+schema. See [notes and generated artifacts](generated-artifacts.md).
+
 ## File responsibilities
 
 ### `STUDY_GUIDE.md`

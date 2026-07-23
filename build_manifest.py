@@ -10,6 +10,7 @@ from collections import Counter
 from pathlib import Path
 
 from studylib import (
+    GeneratedArtifactError,
     GenerationDateError,
     ROOT,
     STUDY_DIR,
@@ -124,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     output = output if output.is_absolute() else ROOT / output
     try:
         return build_manifest(output, courses_dir=courses_dir)
-    except GenerationDateError as exc:
+    except (GeneratedArtifactError, GenerationDateError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
