@@ -54,9 +54,9 @@ describes, so a private tree never has to name its paths in a public repository.
 # One glob per line, relative to this directory, POSIX separators.
 # Blank lines and lines starting with '#' are ignored.
 
-*/lms-import/**        # a whole captured subtree, in every course
-*/COVERAGE_AUDIT.md    # one named report at a course root
-*/*_VERIFICATION.md    # a recurring family of workflow records
+*/lms-import/**             # a whole captured subtree, in every course
+*/COVERAGE_AUDIT.md         # one named report at a course root
+*/SAMPLE_MODULE_REVIEW.md  # another named report — one line per file, not a shape
 ```
 
 - `*` and `?` stay inside one path segment; `**` spans whole segments.
@@ -69,12 +69,23 @@ describes, so a private tree never has to name its paths in a public repository.
 - `validate_notes.py` prints the artifact count beside the note count, so a growing exclusion
   set is visible on every run.
 
-## Naming that keeps declarations safe
+## Naming is a convention, not a validator rule
 
-Notes are kebab-case and live in the typed subdirectories the
-[repository layout](repository-layout.md) defines. Generated artifacts use ALL-CAPS names at a
-course root or inside a dedicated subtree. Keeping to that split is what lets a declaration use
-a family pattern like `*/*_REVIEW.md` without any risk of shadowing a note.
+Notes are conventionally kebab-case and generated artifacts conventionally ALL-CAPS, but nothing in
+`studylib.py` enforces that split. `concept`, `lecture`, `problem-sheet`, and `exam-map` notes must
+live in their typed subdirectory (`concepts/`, `lectures/`, `problem-sheets/`, `exam/`), and
+`glossary` notes must be named exactly `<course>/glossary.md`. A `reference` note has none of
+those constraints and may legally sit directly at a course root, under any filename, including an
+ALL-CAPS one.
+
+A broad shape pattern like `*/*_REVIEW.md` or `*/*_VERIFICATION.md` cannot tell the difference: it
+excludes every past and future file at every course root that fits the shape, whether or not that
+file happens to be a genuine note — or a broken one that most needs to fail validation. For
+course-root workflow records, declare each file by its **exact name**
+(`*/SAMPLE_MODULE_REVIEW.md`), not by a shape family; an exact name only ever excludes the one file
+it names. A directory glob (`*/lms-import/**`, `*/admin/**`) is a different case and stays
+appropriate as written: it declares a whole subtree that is structurally and intentionally generated
+or captured, never a location a person would also write a note into.
 
 ## What the contract deliberately does not do
 

@@ -906,6 +906,82 @@ class GeneratedArtifactDiscoveryTests(unittest.TestCase):
             artifacts = sorted(p.name for p in discover_generated_artifact_paths(courses_dir=Path(courses)))
             self.assertEqual(["COVERAGE_AUDIT.md", "SYNC_REPORT.md"], artifacts)
 
+    def test_family_wildcard_would_shadow_a_genuine_all_caps_course_root_note(self):
+        """A `type: reference` note has no required subdirectory, so it can
+        legitimately sit directly at a course root -- the same location a
+        declared generated artifact occupies -- under a name that happens to
+        fit a documented family-wildcard shape (docs/generated-artifacts.md's
+        own former example was `*/*_VERIFICATION.md`). This exercises both
+        sides of the contrast against one identical fixture: an exact
+        declaration must not exclude the note, while a shape-based family
+        wildcard covering the very same known artifact must exclude it --
+        that second half is the actual hazard this test guards against.
+        """
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            note_text = (
+                VALID_TEXT.replace("course: demo", f"course: {course_dir.name}")
+                .replace("id: demo-example", "id: midterm-exam-review")
+                .replace("type: concept", "type: reference")
+            )
+            (course_dir / "MIDTERM_EXAM_REVIEW.md").write_text(note_text, encoding="utf-8")
+            (course_dir / "KNOWN_REPORT_REVIEW.md").write_text("# Generated\n", encoding="utf-8")
+            declarations = Path(courses) / ".generated-artifacts"
+
+            # Exact declaration: only the specifically named artifact is excluded.
+            declarations.write_text("*/KNOWN_REPORT_REVIEW.md\n", encoding="utf-8")
+            names = sorted(p.name for p in discover_note_paths(courses_dir=Path(courses)))
+            self.assertEqual(["MIDTERM_EXAM_REVIEW.md", "example.md"], names)
+            artifacts = [p.name for p in discover_generated_artifact_paths(courses_dir=Path(courses))]
+            self.assertEqual(["KNOWN_REPORT_REVIEW.md"], artifacts)
+            issues = validate_repository(courses_dir=Path(courses))
+            errors = [i for i in issues if i.level == "error" and i.file.endswith("MIDTERM_EXAM_REVIEW.md")]
+            self.assertEqual([], errors, "a genuine ALL-CAPS course-root note must validate cleanly")
+
+            # Family wildcard covering the same known artifact: the legitimate
+            # note is swallowed too, and silently disappears from validation.
+            declarations.write_text("*/*_REVIEW.md\n", encoding="utf-8")
+            names = sorted(p.name for p in discover_note_paths(courses_dir=Path(courses)))
+            self.assertEqual(["example.md"], names)
+            artifacts = sorted(p.name for p in discover_generated_artifact_paths(courses_dir=Path(courses)))
+            self.assertEqual(["KNOWN_REPORT_REVIEW.md", "MIDTERM_EXAM_REVIEW.md"], artifacts)
+            issues = validate_repository(courses_dir=Path(courses))
+            self.assertFalse(
+                any(i.file.endswith("MIDTERM_EXAM_REVIEW.md") for i in issues),
+                "a family wildcard must swallow the note out of validation entirely -- this is the hazard",
+            )
+
+    def test_family_wildcard_would_hide_a_malformed_all_caps_course_root_note(self):
+        """A broken course-root note must still reach validation and fail under
+        an exact declaration. Under the old family-wildcard style it would
+        vanish from validation entirely instead of failing -- shown here with
+        one added assertion against the same fixture, not a duplicate one,
+        since the swallowing mechanic itself is already fully exercised by
+        the sibling test above.
+        """
+        with tempfile.TemporaryDirectory(dir=ROOT) as courses:
+            course_dir = self._course_tree(courses)
+            (course_dir / "KNOWN_REPORT_REVIEW.md").write_text("# Generated\n", encoding="utf-8")
+            (course_dir / "BROKEN_EXAM_REVIEW.md").write_text(
+                "# Broken\n\nNo frontmatter at all.\n", encoding="utf-8"
+            )
+            declarations = Path(courses) / ".generated-artifacts"
+
+            declarations.write_text("*/KNOWN_REPORT_REVIEW.md\n", encoding="utf-8")
+            notes = discover_note_paths(courses_dir=Path(courses))
+            self.assertIn("BROKEN_EXAM_REVIEW.md", [p.name for p in notes])
+            issues = validate_repository(courses_dir=Path(courses))
+            errors = [i for i in issues if i.level == "error" and i.file.endswith("BROKEN_EXAM_REVIEW.md")]
+            self.assertTrue(errors, "a malformed ALL-CAPS course-root file must still fail validation as a note")
+
+            declarations.write_text("*/*_REVIEW.md\n", encoding="utf-8")
+            notes = discover_note_paths(courses_dir=Path(courses))
+            self.assertNotIn(
+                "BROKEN_EXAM_REVIEW.md",
+                [p.name for p in notes],
+                "a family wildcard must hide the malformed note from validation entirely -- the hazard this guards against",
+            )
+
     def test_declaration_patterns_cannot_reach_into_note_directories(self):
         """A course-root pattern must not shadow a same-named file inside concepts/."""
         with tempfile.TemporaryDirectory(dir=ROOT) as courses:
